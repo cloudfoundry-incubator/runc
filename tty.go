@@ -41,15 +41,13 @@ func createStdioPipes(p *libcontainer.Process, rootuid int) (*tty, error) {
 		return nil, err
 	}
 	fds = append(fds, int(r.Fd()), int(w.Fd()))
-	go io.Copy(os.Stdout, r)
-	p.Stdout = w
+	p.Stdout = os.Stdout
 	t.closers = append(t.closers, r)
 	if r, w, err = os.Pipe(); err != nil {
 		return nil, err
 	}
 	fds = append(fds, int(r.Fd()), int(w.Fd()))
-	go io.Copy(os.Stderr, r)
-	p.Stderr = w
+	p.Stderr = os.Stderr
 	t.closers = append(t.closers, r)
 	// change the ownership of the pipe fds incase we are in a user namespace.
 	for _, fd := range fds {
