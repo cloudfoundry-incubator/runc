@@ -3,6 +3,7 @@
 package libcontainer
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 
@@ -55,53 +56,53 @@ func (l *linuxStandardInit) Init() error {
 	// InitializeMountNamespace() can be executed only for a new mount namespace
 	if l.config.Config.Namespaces.Contains(configs.NEWNS) {
 		if err := setupRootfs(l.config.Config, console); err != nil {
-			return err
+			return fmt.Errorf("ROOTFS", err)
 		}
 	}
 	if hostname := l.config.Config.Hostname; hostname != "" {
 		if err := syscall.Sethostname([]byte(hostname)); err != nil {
-			return err
+			return fmt.Errorf("SETHOST", err)
 		}
 	}
 	if err := apparmor.ApplyProfile(l.config.Config.AppArmorProfile); err != nil {
-		return err
+		return fmt.Errorf("APPARMORE", err)
 	}
 	if err := label.SetProcessLabel(l.config.Config.ProcessLabel); err != nil {
-		return err
+		return fmt.Errorf("LABEL", err)
 	}
 
 	for key, value := range l.config.Config.Sysctl {
 		if err := writeSystemProperty(key, value); err != nil {
-			return err
+			return fmt.Errorf("SYSCTL", err)
 		}
 	}
 
 	for _, path := range l.config.Config.ReadonlyPaths {
 		if err := remountReadonly(path); err != nil {
-			return err
+			return fmt.Errorf("READONLY", err)
 		}
 	}
 	for _, path := range l.config.Config.MaskPaths {
 		if err := maskFile(path); err != nil {
-			return err
+			return fmt.Errorf("MASK", err)
 		}
 	}
 	pdeath, err := system.GetParentDeathSignal()
 	if err != nil {
-		return err
+		return fmt.Errorf("DEATHSIG", err)
 	}
 	if l.config.Config.Seccomp != nil {
 		if err := seccomp.InitSeccomp(l.config.Config.Seccomp); err != nil {
-			return err
+			return fmt.Errorf("INITSSECCOMP", err)
 		}
 	}
 	if err := finalizeNamespace(l.config); err != nil {
-		return err
+		return fmt.Errorf("FINALIZE", err)
 	}
 	// finalizeNamespace can change user/group which clears the parent death
 	// signal, so we restore it here.
 	if err := pdeath.Restore(); err != nil {
-		return err
+		return fmt.Errorf("RESTOREDEATH", err)
 	}
 	// compare the parent from the inital start of the init process and make sure that it did not change.
 	// if the parent changes that means it died and we were reparened to something else so we should
@@ -109,5 +110,9 @@ func (l *linuxStandardInit) Init() error {
 	if syscall.Getppid() != l.parentPid {
 		return syscall.Kill(syscall.Getpid(), syscall.SIGKILL)
 	}
-	return system.Execv(l.config.Args[0], l.config.Args[0:], os.Environ())
+	if err := system.Execv(l.config.Args[0], l.config.Args[0:], os.Environ()); err != nil {
+		return fmt.Errorf("EXECVE", err)
+	}
+
+	return nil
 }

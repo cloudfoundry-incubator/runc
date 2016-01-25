@@ -554,7 +554,7 @@ func pivotRoot(rootfs, pivotBaseDir string) error {
 	// Make pivotDir rprivate to make sure any of the unmounts don't
 	// propagate to parent.
 	if err := syscall.Mount("", pivotDir, "", syscall.MS_PRIVATE|syscall.MS_REC, ""); err != nil {
-		return err
+		return fmt.Errorf("mount private: %s", err)
 	}
 
 	if err := syscall.Unmount(pivotDir, syscall.MNT_DETACH); err != nil {

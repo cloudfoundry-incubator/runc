@@ -112,29 +112,29 @@ func finalizeNamespace(config *initConfig) error {
 	}
 	w, err := newCapWhitelist(capabilities)
 	if err != nil {
-		return err
+		return fmt.Errorf("CAPS", err)
 	}
 	// drop capabilities in bounding set before changing user
 	if err := w.dropBoundingSet(); err != nil {
-		return err
+		return fmt.Errorf("BOUND", err)
 	}
 	// preserve existing capabilities while we change users
 	if err := system.SetKeepCaps(); err != nil {
-		return err
+		return fmt.Errorf("KEEPCA", err)
 	}
 	if err := setupUser(config); err != nil {
-		return err
+		return fmt.Errorf("USER", err)
 	}
 	if err := system.ClearKeepCaps(); err != nil {
 		return err
 	}
 	// drop all other capabilities
 	if err := w.drop(); err != nil {
-		return err
+		return fmt.Errorf("DROP", err)
 	}
 	if config.Cwd != "" {
 		if err := syscall.Chdir(config.Cwd); err != nil {
-			return err
+			return fmt.Errorf("CHDIR", err)
 		}
 	}
 	return nil
@@ -190,18 +190,18 @@ func setupUser(config *initConfig) error {
 	// before we change to the container's user make sure that the processes STDIO
 	// is correctly owned by the user that we are switching to.
 	if err := fixStdioPermissions(execUser); err != nil {
-		return err
+		return fmt.Errorf("STDIO", err)
 	}
 	suppGroups := append(execUser.Sgids, addGroups...)
 	if err := syscall.Setgroups(suppGroups); err != nil {
-		return err
+		return fmt.Errorf("SETGROUPS", err)
 	}
 
 	if err := system.Setgid(execUser.Gid); err != nil {
-		return err
+		return fmt.Errorf("SETGID", err)
 	}
 	if err := system.Setuid(execUser.Uid); err != nil {
-		return err
+		return fmt.Errorf("SETUID", err)
 	}
 	// if we didn't get HOME already, set it based on the user's HOME
 	if envHome := os.Getenv("HOME"); envHome == "" {
@@ -218,7 +218,7 @@ func setupUser(config *initConfig) error {
 func fixStdioPermissions(u *user.ExecUser) error {
 	var null syscall.Stat_t
 	if err := syscall.Stat("/dev/null", &null); err != nil {
-		return err
+		return fmt.Errorf("DEVNULL", err)
 	}
 	for _, fd := range []uintptr{
 		os.Stdin.Fd(),
@@ -227,14 +227,14 @@ func fixStdioPermissions(u *user.ExecUser) error {
 	} {
 		var s syscall.Stat_t
 		if err := syscall.Fstat(int(fd), &s); err != nil {
-			return err
+			return fmt.Errorf("FSTAT", err)
 		}
 		// skip chown of /dev/null if it was used as one of the STDIO fds.
 		if s.Rdev == null.Rdev {
 			continue
 		}
 		if err := syscall.Fchown(int(fd), u.Uid, u.Gid); err != nil {
-			return err
+			return fmt.Errorf("FCHOWN %s, %d, %s", fd, u.Uid, err)
 		}
 	}
 	return nil
