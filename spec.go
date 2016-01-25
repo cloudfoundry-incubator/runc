@@ -350,6 +350,8 @@ func createLibcontainerConfig(cgroupName string, spec *specs.LinuxSpec, rspec *s
 		return nil, fmt.Errorf("rootfsPropagation=%v is not supported", rspec.Linux.RootfsPropagation)
 	}
 
+	config.PivotDir = "/.pivot_root"
+
 	for _, ns := range rspec.Linux.Namespaces {
 		t, exists := namespaceMapping[ns.Type]
 		if !exists {

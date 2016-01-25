@@ -233,9 +233,7 @@ func fixStdioPermissions(u *user.ExecUser) error {
 		if s.Rdev == null.Rdev {
 			continue
 		}
-		if err := syscall.Fchown(int(fd), u.Uid, u.Gid); err != nil {
-			return err
-		}
+		syscall.Fchown(int(fd), u.Uid, u.Gid)
 	}
 	return nil
 }
