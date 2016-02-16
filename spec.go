@@ -253,6 +253,9 @@ func createLibcontainerConfig(cgroupName string, spec *specs.LinuxSpec) (*config
 		},
 	}
 
+	// temporary garden hack
+	config.PivotDir = "/.pivot_root"
+
 	exists := false
 	if config.RootPropagation, exists = mountPropagationMapping[spec.Linux.RootfsPropagation]; !exists {
 		return nil, fmt.Errorf("rootfsPropagation=%v is not supported", spec.Linux.RootfsPropagation)
