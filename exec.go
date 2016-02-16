@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/codegangsta/cli"
@@ -61,6 +62,8 @@ var execCommand = cli.Command{
 		if err != nil {
 			logrus.Fatalf("exec failed: %v", err)
 		}
+
+		time.Sleep(100 * time.Millisecond) // hack to allow goroutines copying stdout/err to finish
 		os.Exit(status)
 	},
 }
