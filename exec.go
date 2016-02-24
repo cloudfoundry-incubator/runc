@@ -63,7 +63,7 @@ var execCommand = cli.Command{
 			logrus.Fatalf("exec failed: %v", err)
 		}
 
-		time.Sleep(100 * time.Millisecond) // hack to allow goroutines copying stdout/err to finish
+		time.Sleep(500 * time.Millisecond) // hack to allow goroutines copying stdout/err to finish
 		os.Exit(status)
 	},
 }
