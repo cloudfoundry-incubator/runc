@@ -251,10 +251,13 @@ func setupSdNotify(spec *specs.LinuxSpec, notifySocket string) {
 	spec.Process.Env = append(spec.Process.Env, fmt.Sprintf("NOTIFY_SOCKET=%s", notifySocket))
 }
 
-func destroy(container libcontainer.Container) {
+func destroy(container libcontainer.Container) error {
 	if err := container.Destroy(); err != nil {
 		logrus.Error(err)
+		return err
 	}
+
+	return nil
 }
 
 // setupIO sets the proper IO on the process depending on the configuration
