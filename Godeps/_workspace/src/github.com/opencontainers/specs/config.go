@@ -35,6 +35,8 @@ type Process struct {
 	Cwd string `json:"cwd"`
 	// Capabilities are linux capabilities that are kept for the container.
 	Capabilities []string `json:"capabilities,omitempty"`
+	// RLimits are resource limits applied to the process.
+	Rlimits []Rlimit
 	// ApparmorProfile specified the apparmor profile for the container.
 	ApparmorProfile string `json:"apparmorProfile,omitempty"`
 	// SelinuxProcessLabel specifies the selinux context that the container process is run as.
