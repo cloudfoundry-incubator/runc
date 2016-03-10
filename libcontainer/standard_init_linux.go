@@ -10,7 +10,7 @@ import (
 
 	"github.com/opencontainers/runc/libcontainer/apparmor"
 	"github.com/opencontainers/runc/libcontainer/configs"
-	"github.com/opencontainers/runc/libcontainer/keys"
+	keyctl "github.com/opencontainers/runc/libcontainer/keys"
 	"github.com/opencontainers/runc/libcontainer/label"
 	"github.com/opencontainers/runc/libcontainer/seccomp"
 	"github.com/opencontainers/runc/libcontainer/system"
@@ -73,7 +73,7 @@ func (l *linuxStandardInit) Init() error {
 	if err := setupRoute(l.config.Config); err != nil {
 		return err
 	}
-	if err := setupRlimits(l.config.Config); err != nil {
+	if err := setupRlimits(l.config.Rlimits); err != nil {
 		return err
 	}
 

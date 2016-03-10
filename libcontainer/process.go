@@ -5,6 +5,8 @@ import (
 	"io"
 	"math"
 	"os"
+
+	"github.com/opencontainers/runc/libcontainer/configs"
 )
 
 type processOperations interface {
@@ -47,6 +49,9 @@ type Process struct {
 	// Capabilities specify the capabilities to keep when executing the process inside the container
 	// All capabilities not specified will be dropped from the processes capability mask
 	Capabilities []string
+
+	// RLimits specify the resource limits to apply to the process
+	Rlimits []configs.Rlimit
 
 	// AppArmorProfile specifies the profile to apply to the process and is
 	// changed at the time the process is execed
