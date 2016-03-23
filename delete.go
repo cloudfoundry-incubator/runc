@@ -19,6 +19,9 @@ status of "ubuntu01" as "destroyed" the following will delete resources held for
 		if err != nil {
 			fatal(err)
 		}
-		destroy(container)
+
+		if err := destroy(container); err != nil {
+			fatal(err)
+		}
 	},
 }
