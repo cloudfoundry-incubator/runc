@@ -176,6 +176,9 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcont
 		return nil, err
 	}
 
+	// temporary garden hack
+	config.PivotDir = "/.pivot_root"
+
 	if _, err := os.Stat(config.Rootfs); err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("rootfs (%q) does not exist", config.Rootfs)
