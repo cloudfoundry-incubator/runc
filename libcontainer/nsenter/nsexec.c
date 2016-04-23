@@ -78,6 +78,7 @@ struct nlconfig_t {
 	char *namespaces;
 	size_t namespaces_len;
 	uint8_t is_setgroup;
+	uint8_t is_rootless;
 
 	/*
 	 * Namespace uids and gids. If cloneflags doesn't contain
@@ -101,6 +102,7 @@ struct nlconfig_t {
 #define UIDMAP_ATTR		27283
 #define GIDMAP_ATTR		27284
 #define SETGROUP_ATTR		27285
+#define ROOTLESS_ATTR	    27286
 
 /*
  * Use the raw syscall for versions of glibc which don't include a function for
@@ -189,6 +191,7 @@ static void update_setgroups(int pid, enum policy_t setgroup)
 			policy = "deny";
 			break;
 		case SETGROUPS_DEFAULT:
+		default:
 			/* Nothing to do. */
 			return;
 	}
@@ -372,6 +375,9 @@ static void nl_parse(int fd, struct nlconfig_t *config)
 		switch (nlattr->nla_type) {
 		case CLONE_FLAGS_ATTR:
 			config->cloneflags = readint32(current);
+			break;
+		case ROOTLESS_ATTR:
+			config->is_rootless = readint8(current);
 			break;
 		case NS_PATHS_ATTR:
 			config->namespaces = current;
@@ -618,9 +624,21 @@ void nsexec(void)
 					}
 					break;
 				case SYNC_USERMAP_PLS:
-					/* Enable setgroups(2) if we've been asked to. */
+					/*
+					 * Enable setgroups(2) if we've been asked to. But we also
+					 * have to explicitly disable setgroups(2) if we're
+					 * creating a rootless container (this is required since
+					 * Linux 3.19).
+					 */
+					if (config.is_rootless && config.is_setgroup) {
+						kill(child, SIGKILL);
+						bail("cannot allow setgroup in an unprivileged user namespace setup");
+					}
+
 					if (config.is_setgroup)
 						update_setgroups(child, SETGROUPS_ALLOW);
+					if (config.is_rootless)
+						update_setgroups(child, SETGROUPS_DENY);
 
 					/* Set up mappings. */
 					update_uidmap(child, config.uidmap, config.uidmap_len);
@@ -816,7 +834,7 @@ void nsexec(void)
 			syncfd = syncpipe[0];
 
 			/* For debugging. */
-			prctl(PR_SET_NAME, (unsigned long) "runc:[1:INIT]", 0, 0, 0);
+			prctl(PR_SET_NAME, (unsigned long) "runc:[2:INIT]", 0, 0, 0);
 
 			if (setsid() < 0)
 				bail("setsid failed");
@@ -827,8 +845,10 @@ void nsexec(void)
 			if (setgid(0) < 0)
 				bail("setgid failed");
 
-			if (setgroups(0, NULL) < 0)
-				bail("setgroups failed");
+			if (!config.is_rootless && config.is_setgroup) {
+				if (setgroups(0, NULL) < 0)
+					bail("setgroups failed");
+			}
 
 			/* Close sync pipes. */
 			close(syncpipe[0]);

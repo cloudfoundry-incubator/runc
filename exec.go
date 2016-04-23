@@ -86,9 +86,6 @@ following will output a list of processes running in the container:
 		},
 	},
 	Action: func(context *cli.Context) error {
-		if os.Geteuid() != 0 {
-			return fmt.Errorf("runc should be run as root")
-		}
 		status, err := execProcess(context)
 		if err == nil {
 			os.Exit(status)

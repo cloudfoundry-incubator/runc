@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"syscall"
 
@@ -83,6 +84,11 @@ using the runc checkpoint command.`,
 		},
 	},
 	Action: func(context *cli.Context) error {
+		// XXX: Currently this is untested with rootless containers.
+		if os.Geteuid() != 0 {
+			return fmt.Errorf("runc restore requires root")
+		}
+
 		imagePath := context.String("image-path")
 		id := context.Args().First()
 		if id == "" {
