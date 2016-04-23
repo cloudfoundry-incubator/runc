@@ -147,6 +147,7 @@ type CreateOpts struct {
 	NoPivotRoot      bool
 	NoNewKeyring     bool
 	Spec             *specs.Spec
+	Rootless         bool
 }
 
 // CreateLibcontainerConfig creates a new libcontainer configuration from a
@@ -177,6 +178,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 		Hostname:     spec.Hostname,
 		Labels:       append(labels, fmt.Sprintf("bundle=%s", cwd)),
 		NoNewKeyring: opts.NoNewKeyring,
+		Rootless:     opts.Rootless,
 	}
 
 	exists := false
@@ -207,7 +209,7 @@ func CreateLibcontainerConfig(opts *CreateOpts) (*configs.Config, error) {
 	if err := setupUserNamespace(spec, config); err != nil {
 		return nil, err
 	}
-	c, err := createCgroupConfig(opts.CgroupName, opts.UseSystemdCgroup, spec)
+	c, err := createCgroupConfig(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -256,10 +258,14 @@ func createLibcontainerMount(cwd string, m specs.Mount) *configs.Mount {
 	}
 }
 
-func createCgroupConfig(name string, useSystemdCgroup bool, spec *specs.Spec) (*configs.Cgroup, error) {
+func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 	var (
 		err          error
 		myCgroupPath string
+
+		spec             = opts.Spec
+		useSystemdCgroup = opts.UseSystemdCgroup
+		name             = opts.CgroupName
 	)
 
 	c := &configs.Cgroup{
@@ -300,7 +306,12 @@ func createCgroupConfig(name string, useSystemdCgroup bool, spec *specs.Spec) (*
 		c.Path = myCgroupPath
 	}
 
-	c.Resources.AllowedDevices = allowedDevices
+	// In rootless containers, any attempt to make cgroup changes will fail.
+	// libcontainer will validate this and we shouldn't add any cgroup options
+	// the user didn't specify.
+	if !opts.Rootless {
+		c.Resources.AllowedDevices = allowedDevices
+	}
 	r := spec.Linux.Resources
 	if r == nil {
 		return c, nil
@@ -336,8 +347,10 @@ func createCgroupConfig(name string, useSystemdCgroup bool, spec *specs.Spec) (*
 		}
 		c.Resources.Devices = append(c.Resources.Devices, dd)
 	}
-	// append the default allowed devices to the end of the list
-	c.Resources.Devices = append(c.Resources.Devices, allowedDevices...)
+	if !opts.Rootless {
+		// append the default allowed devices to the end of the list
+		c.Resources.Devices = append(c.Resources.Devices, allowedDevices...)
+	}
 	if r.Memory != nil {
 		if r.Memory.Limit != nil {
 			c.Resources.Memory = int64(*r.Memory.Limit)

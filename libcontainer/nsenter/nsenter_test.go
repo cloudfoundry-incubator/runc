@@ -29,7 +29,7 @@ func TestNsenterValidPaths(t *testing.T) {
 
 	namespaces := []string{
 		// join pid ns of the current process
-		fmt.Sprintf("/proc/%d/ns/pid", os.Getpid()),
+		fmt.Sprintf("pid:/proc/%d/ns/pid", os.Getpid()),
 	}
 	cmd := &exec.Cmd{
 		Path:       os.Args[0],
@@ -87,7 +87,7 @@ func TestNsenterInvalidPaths(t *testing.T) {
 
 	namespaces := []string{
 		// join pid ns of the current process
-		fmt.Sprintf("/proc/%d/ns/pid", -1),
+		fmt.Sprintf("pid:/proc/%d/ns/pid", -1),
 	}
 	cmd := &exec.Cmd{
 		Path:       os.Args[0],

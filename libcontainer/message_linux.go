@@ -18,6 +18,7 @@ const (
 	UidmapAttr      uint16 = 27284
 	GidmapAttr      uint16 = 27285
 	SetgroupAttr    uint16 = 27286
+	RootlessAttr    uint16 = 27287
 	// When syscall.NLA_HDRLEN is in gccgo, take this out.
 	syscall_NLA_HDRLEN = (syscall.SizeofNlAttr + syscall.NLA_ALIGNTO - 1) & ^(syscall.NLA_ALIGNTO - 1)
 )
