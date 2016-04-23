@@ -80,7 +80,8 @@ func (p *setnsProcess) start() (err error) {
 	if err = p.execSetns(); err != nil {
 		return newSystemErrorWithCause(err, "executing setns process")
 	}
-	if len(p.cgroupPaths) > 0 {
+	// We can't join cgroups if we're in a rootless container.
+	if !p.config.Rootless && len(p.cgroupPaths) > 0 {
 		if err := cgroups.EnterPid(p.cgroupPaths, p.pid()); err != nil {
 			return newSystemErrorWithCausef(err, "adding pid %d to cgroups", p.pid())
 		}
@@ -277,13 +278,15 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", p.pid())
 	}
 	p.setExternalDescriptors(fds)
-	// Do this before syncing with child so that no children
-	// can escape the cgroup
-	if err := p.manager.Apply(p.pid()); err != nil {
-		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+	if !p.container.config.Rootless {
+		// Do this before syncing with child so that no children can escape the
+		// cgroup. We can't do this if we're not running as root.
+		if err := p.manager.Apply(p.pid()); err != nil {
+			return newSystemErrorWithCause(err, "applying cgroup configuration for process")
+		}
 	}
 	defer func() {
-		if err != nil {
+		if err != nil && !p.container.config.Rootless {
 			// TODO: should not be the responsibility to call here
 			p.manager.Destroy()
 		}
@@ -321,8 +324,11 @@ func (p *initProcess) start() error {
 				return newSystemErrorWithCause(err, "writing syncT 'ack fd'")
 			}
 		case procReady:
-			if err := p.manager.Set(p.config.Config); err != nil {
-				return newSystemErrorWithCause(err, "setting cgroup config for ready process")
+			// We can't set cgroups if we're in a rootless container.
+			if !p.container.config.Rootless {
+				if err := p.manager.Set(p.config.Config); err != nil {
+					return newSystemErrorWithCause(err, "setting cgroup config for ready process")
+				}
 			}
 			// set oom_score_adj
 			if err := setOomScoreAdj(p.config.Config.OomScoreAdj, p.pid()); err != nil {
