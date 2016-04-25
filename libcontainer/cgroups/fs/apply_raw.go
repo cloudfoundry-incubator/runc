@@ -246,7 +246,7 @@ func (m *Manager) Freeze(state configs.FreezerState) error {
 }
 
 func (m *Manager) GetPids() ([]int, error) {
-	dir, err := getCgroupPath(m.Cgroups)
+	dir, err := GetCgroupPath(m.Cgroups)
 	if err != nil {
 		return nil, err
 	}
@@ -254,14 +254,14 @@ func (m *Manager) GetPids() ([]int, error) {
 }
 
 func (m *Manager) GetAllPids() ([]int, error) {
-	dir, err := getCgroupPath(m.Cgroups)
+	dir, err := GetCgroupPath(m.Cgroups)
 	if err != nil {
 		return nil, err
 	}
 	return cgroups.GetAllPids(dir)
 }
 
-func getCgroupPath(c *configs.Cgroup) (string, error) {
+func GetCgroupPath(c *configs.Cgroup) (string, error) {
 	d, err := getCgroupData(c, 0)
 	if err != nil {
 		return "", err
@@ -298,25 +298,8 @@ func getCgroupData(c *configs.Cgroup, pid int) (*cgroupData, error) {
 	}, nil
 }
 
-func (raw *cgroupData) parentPath(subsystem, mountpoint, root string) (string, error) {
-	// Use GetThisCgroupDir instead of GetInitCgroupDir, because the creating
-	// process could in container and shared pid namespace with host, and
-	// /proc/1/cgroup could point to whole other world of cgroups.
-	initPath, err := cgroups.GetThisCgroupDir(subsystem)
-	if err != nil {
-		return "", err
-	}
-	// This is needed for nested containers, because in /proc/self/cgroup we
-	// see pathes from host, which don't exist in container.
-	relDir, err := filepath.Rel(root, initPath)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(mountpoint, relDir), nil
-}
-
 func (raw *cgroupData) path(subsystem string) (string, error) {
-	mnt, root, err := cgroups.FindCgroupMountpointAndRoot(subsystem)
+	mnt, err := cgroups.FindCgroupMountpoint(subsystem)
 	// If we didn't mount the subsystem, there is no point we make the path.
 	if err != nil {
 		return "", err
@@ -328,7 +311,7 @@ func (raw *cgroupData) path(subsystem string) (string, error) {
 		return filepath.Join(raw.root, filepath.Base(mnt), raw.innerPath), nil
 	}
 
-	parentPath, err := raw.parentPath(subsystem, mnt, root)
+	parentPath, err := cgroups.GetOwnCgroupPath(subsystem)
 	if err != nil {
 		return "", err
 	}
