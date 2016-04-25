@@ -297,7 +297,7 @@ func createCgroupConfig(opts *CreateOpts) (*configs.Cgroup, error) {
 		}
 	} else {
 		if myCgroupPath == "" {
-			myCgroupPath, err = cgroups.GetThisCgroupDir("devices")
+			myCgroupPath, err = cgroups.GetOwnCgroup("devices")
 			if err != nil {
 				return nil, err
 			}

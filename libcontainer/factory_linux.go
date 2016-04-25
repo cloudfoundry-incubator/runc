@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/pkg/mount"
 	"github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/fs"
+	"github.com/opencontainers/runc/libcontainer/cgroups/rootless"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/configs/validate"
@@ -82,6 +83,20 @@ func SystemdCgroups(l *LinuxFactory) error {
 func Cgroupfs(l *LinuxFactory) error {
 	l.NewCgroupsManager = func(config *configs.Cgroup, paths map[string]string) cgroups.Manager {
 		return &fs.Manager{
+			Cgroups: config,
+			Paths:   paths,
+		}
+	}
+	return nil
+}
+
+// RootlessCgroups is an options func to configure a LinuxFactory to
+// return containers that use the "rootless" cgroup manager, which will
+// fail to do any operations not possible to do with an unprivileged user.
+// It should only be used in conjunction with rootless containers.
+func RootlessCgroups(l *LinuxFactory) error {
+	l.NewCgroupsManager = func(config *configs.Cgroup, paths map[string]string) cgroups.Manager {
+		return &rootless.Manager{
 			Cgroups: config,
 			Paths:   paths,
 		}
@@ -189,6 +204,9 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 	if err := os.Chown(fifoName, uid, gid); err != nil {
 		return nil, newGenericError(err, SystemError)
 	}
+	if config.Rootless {
+		RootlessCgroups(l)
+	}
 	c := &linuxContainer{
 		id:            id,
 		root:          containerRoot,
@@ -215,6 +233,10 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		processPid:       state.InitProcessPid,
 		processStartTime: state.InitProcessStartTime,
 		fds:              state.ExternalDescriptors,
+	}
+	// We have to use the RootlessManager.
+	if state.Rootless {
+		RootlessCgroups(l)
 	}
 	c := &linuxContainer{
 		initProcess:   r,
