@@ -98,7 +98,7 @@ this is just some garbage data
 }
 
 func TestValidGetExecUser(t *testing.T) {
-	const passwdContent = `
+	defaultPasswdContent := `
 root:x:0:0:root user:/root:/bin/bash
 adm:x:42:43:adm:/var/adm:/bin/false
 111:x:222:333::/var/garbage
@@ -121,8 +121,9 @@ this is just some garbage data
 	}
 
 	tests := []struct {
-		ref      string
-		expected ExecUser
+		ref           string
+		expected      ExecUser
+		passwdContent string
 	}{
 		{
 			ref: "root",
@@ -132,6 +133,7 @@ this is just some garbage data
 				Sgids: []int{0, 1234},
 				Home:  "/root",
 			},
+			passwdContent: defaultPasswdContent,
 		},
 		{
 			ref: "adm",
@@ -141,33 +143,37 @@ this is just some garbage data
 				Sgids: []int{1234},
 				Home:  "/var/adm",
 			},
+			passwdContent: defaultPasswdContent,
 		},
 		{
 			ref: "root:adm",
 			expected: ExecUser{
 				Uid:   0,
 				Gid:   43,
-				Sgids: defaultExecUser.Sgids,
+				Sgids: []int{0, 1234},
 				Home:  "/root",
 			},
+			passwdContent: defaultPasswdContent,
 		},
 		{
 			ref: "adm:1234",
 			expected: ExecUser{
 				Uid:   42,
 				Gid:   1234,
-				Sgids: defaultExecUser.Sgids,
+				Sgids: []int{1234},
 				Home:  "/var/adm",
 			},
+			passwdContent: defaultPasswdContent,
 		},
 		{
 			ref: "42:1234",
 			expected: ExecUser{
 				Uid:   42,
 				Gid:   1234,
-				Sgids: defaultExecUser.Sgids,
+				Sgids: []int{1234},
 				Home:  "/var/adm",
 			},
+			passwdContent: defaultPasswdContent,
 		},
 		{
 			ref: "1337:1234",
@@ -177,6 +183,7 @@ this is just some garbage data
 				Sgids: defaultExecUser.Sgids,
 				Home:  defaultExecUser.Home,
 			},
+			passwdContent: defaultPasswdContent,
 		},
 		{
 			ref: "1337",
@@ -186,7 +193,9 @@ this is just some garbage data
 				Sgids: defaultExecUser.Sgids,
 				Home:  defaultExecUser.Home,
 			},
+			passwdContent: defaultPasswdContent,
 		},
+		// When ref is empty and the defaultUser.Uid is not found in the passwd file
 		{
 			ref: "",
 			expected: ExecUser{
@@ -195,6 +204,20 @@ this is just some garbage data
 				Sgids: defaultExecUser.Sgids,
 				Home:  defaultExecUser.Home,
 			},
+			passwdContent: defaultPasswdContent,
+		},
+		// When ref is empty and the defaultUser.Uid is found in the passwd file
+		{
+			ref: "",
+			expected: ExecUser{
+				Uid:   defaultExecUser.Uid,
+				Gid:   500,
+				Sgids: defaultExecUser.Sgids,
+				Home:  "/home/test",
+			},
+			passwdContent: `
+test:x:8888:500::/home/test:::::
+`,
 		},
 
 		// Regression tests for #695.
@@ -206,6 +229,7 @@ this is just some garbage data
 				Sgids: defaultExecUser.Sgids,
 				Home:  "/home/odd",
 			},
+			passwdContent: defaultPasswdContent,
 		},
 		{
 			ref: "111:444",
@@ -215,11 +239,12 @@ this is just some garbage data
 				Sgids: defaultExecUser.Sgids,
 				Home:  "/home/odd",
 			},
+			passwdContent: defaultPasswdContent,
 		},
 	}
 
 	for _, test := range tests {
-		passwd := strings.NewReader(passwdContent)
+		passwd := strings.NewReader(test.passwdContent)
 		group := strings.NewReader(groupContent)
 
 		execUser, err := GetExecUser(test.ref, &defaultExecUser, passwd, group)
