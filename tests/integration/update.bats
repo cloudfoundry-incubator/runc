@@ -48,6 +48,9 @@ function check_cgroup_value() {
 }
 
 @test "update" {
+    # XXX: currently cgroups require root containers.
+    requires root
+
     # run a few busyboxes detached
     runc run -d --console /dev/pts/ptmx test_update
     [ "$status" -eq 0 ]

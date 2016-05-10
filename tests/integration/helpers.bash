@@ -28,6 +28,9 @@ KERNEL_MINOR="${KERNEL_MINOR%%.*}"
 # Root state path.
 ROOT="$BATS_TMPDIR/runc"
 
+# Check if we're in rootless mode.
+ROOTLESS=$(id -u)
+
 # Wrapper for runc.
 function runc() {
   run __runc "$@"
@@ -56,7 +59,12 @@ function requires() {
 		case $var in
 			criu)
 				if [ ! -e "$CRIU" ]; then
-					skip "Test requires ${var}."
+					skip "test requires ${var}"
+				fi
+				;;
+			root)
+				if [ "$ROOTLESS" -ne 0 ]; then
+					skip "test requires ${var}"
 				fi
 				;;
 			*)
