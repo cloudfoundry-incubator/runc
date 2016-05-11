@@ -65,6 +65,15 @@ integration: runctestimage
 localintegration: all
 	bats -t tests/integration${TESTFLAGS}
 
+# XXX(cyphar): Currently these are not enabled by default for test runs, due to
+#              known bugs with console handling in rootless containers.
+
+rootlessintegration: runctestimage
+	docker run -e TESTFLAGS -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_TEST_IMAGE) make localrootlessintegration
+
+localrootlessintegration: all
+	sudo -u '#1000' bats -t tests/integration${TESTFLAGS}
+
 install:
 	install -D -m0755 runc $(BINDIR)/runc
 
