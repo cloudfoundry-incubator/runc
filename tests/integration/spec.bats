@@ -26,7 +26,7 @@ function teardown() {
   [ ! -e config.json ]
 
   # test generation of spec does not return an error
-  runc spec
+  runc_spec
   [ "$status" -eq 0 ]
 
   # test generation of spec created our config.json (spec)
@@ -51,7 +51,7 @@ function teardown() {
   [ ! -e "$HELLO_BUNDLE"/config.json ]
 
   # test generation of spec does not return an error
-  runc spec --bundle "$HELLO_BUNDLE"
+  runc_spec --bundle "$HELLO_BUNDLE"
   [ "$status" -eq 0 ]
 
   # test generation of spec created our config.json (spec)
@@ -70,6 +70,7 @@ function teardown() {
   cd "$HELLO_BUNDLE"
 
   run git clone https://github.com/opencontainers/runtime-spec.git src/runtime-spec
+  echo "${output}" >&2
   [ "$status" -eq 0 ]
 
   SPEC_COMMIT=$(grep runtime-spec ${TESTDIR}/../../Godeps/Godeps.json -A 4 | grep Rev | cut -d":" -f 2 | tr -d ' "')
@@ -81,15 +82,19 @@ function teardown() {
   [ -e src/runtime-spec/schema/schema.json ]
 
   run bash -c "GOPATH='$GOPATH' go get github.com/xeipuuv/gojsonschema"
+  echo "${output}" >&2
   [ "$status" -eq 0 ]
 
   GOPATH="$GOPATH" go build src/runtime-spec/schema/validate.go
+  echo "${output}" >&2
   [ -e ./validate ]
 
-  runc spec
+  runc_spec
+  [ "$status" -eq 0 ]
   [ -e config.json ]
 
   run ./validate src/runtime-spec/schema/schema.json config.json
+  echo "${output}" >&2
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" == *"The document is valid"* ]]
 }

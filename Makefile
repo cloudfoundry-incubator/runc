@@ -23,6 +23,8 @@ MAN_PAGES = $(shell ls $(MAN_DIR)/*.8)
 MAN_PAGES_BASE = $(notdir $(MAN_PAGES))
 MAN_INSTALL_PATH := ${PREFIX}/share/man/man8/
 
+ROOTLESS_USER ?= rootless
+
 RELEASE_DIR := $(CURDIR)/release
 
 VERSION := ${shell cat ./VERSION}
@@ -86,10 +88,10 @@ runcimage:
 	docker build -t $(RUNC_IMAGE) .
 
 test:
-	make unittest integration
+	make unittest integration rootlessintegration
 
 localtest:
-	make localunittest localintegration
+	make localunittest localintegration localrootlessintegration
 
 unittest: runcimage
 	docker run -e TESTFLAGS -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localunittest
@@ -98,10 +100,16 @@ localunittest: all
 	go test -timeout 3m -tags "$(BUILDTAGS)" ${TESTFLAGS} -v ./...
 
 integration: runcimage
-	docker run -e TESTFLAGS -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localintegration
+	docker run -e TESTFLAGS -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localintegration
 
 localintegration: all
 	bats -t tests/integration${TESTFLAGS}
+
+rootlessintegration: runcimage
+	docker run -e TESTFLAGS -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make localrootlessintegration
+
+localrootlessintegration: all
+	sudo -u $(ROOTLESS_USER) env "PATH=$(PATH)" bats -t tests/integration${TESTFLAGS}
 
 shell: all
 	docker run -e TESTFLAGS -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) bash
