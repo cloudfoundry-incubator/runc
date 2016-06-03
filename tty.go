@@ -7,10 +7,25 @@ import (
 	"io"
 	"os"
 	"sync"
+	"syscall"
 
 	"github.com/docker/docker/pkg/term"
 	"github.com/opencontainers/runc/libcontainer"
 )
+
+type tty struct {
+	console   libcontainer.Console
+	state     *term.State
+	closers   []io.Closer
+	postStart []io.Closer
+	wg        sync.WaitGroup
+}
+
+func (t *tty) copyIO(w io.Writer, r io.ReadCloser) {
+	defer t.wg.Done()
+	io.Copy(w, r)
+	r.Close()
+}
 
 // setup standard pipes so that the TTY of the calling runc process
 // is not inherited by the container.
@@ -46,45 +61,39 @@ func createStdioPipes(p *libcontainer.Process, rootuid, rootgid int) (*tty, erro
 	return t, nil
 }
 
-func (t *tty) copyIO(w io.Writer, r io.ReadCloser) {
-	defer t.wg.Done()
-	io.Copy(w, r)
-	r.Close()
+func dupStdio(process *libcontainer.Process, rootuid, rootgid int) error {
+	process.Stdin = os.Stdin
+	process.Stdout = os.Stdout
+	process.Stderr = os.Stderr
+	for _, fd := range []uintptr{
+		os.Stdin.Fd(),
+		os.Stdout.Fd(),
+		os.Stderr.Fd(),
+	} {
+		if err := syscall.Fchown(int(fd), rootuid, rootgid); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func createTty(p *libcontainer.Process, rootuid, rootgid int, consolePath string) (*tty, error) {
-	if consolePath != "" {
-		if err := p.ConsoleFromPath(consolePath); err != nil {
-			return nil, err
-		}
-		return &tty{}, nil
-	}
-	console, err := p.NewConsole(rootuid, rootgid)
+func (t *tty) recvtty(process *libcontainer.Process) error {
+	console, err := process.GetConsole()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	go io.Copy(console, os.Stdin)
 	go io.Copy(os.Stdout, console)
 
 	state, err := term.SetRawTerminal(os.Stdin.Fd())
 	if err != nil {
-		return nil, fmt.Errorf("failed to set the terminal from the stdin: %v", err)
+		return fmt.Errorf("failed to set the terminal from the stdin: %v", err)
 	}
-	return &tty{
-		console: console,
-		state:   state,
-		closers: []io.Closer{
-			console,
-		},
-	}, nil
-}
 
-type tty struct {
-	console   libcontainer.Console
-	state     *term.State
-	closers   []io.Closer
-	postStart []io.Closer
-	wg        sync.WaitGroup
+	t.console = console
+	t.state = state
+	t.closers = []io.Closer{console}
+	return nil
 }
 
 // ClosePostStart closes any fds that are provided to the container and dup2'd

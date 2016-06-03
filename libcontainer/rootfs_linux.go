@@ -4,7 +4,6 @@ package libcontainer
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -35,9 +34,11 @@ func needsSetupDev(config *configs.Config) bool {
 	return true
 }
 
-// setupRootfs sets up the devices, mount points, and filesystems for use inside a
-// new mount namespace.
-func setupRootfs(config *configs.Config, console *linuxConsole, pipe io.ReadWriter) (err error) {
+// prepareRootfs sets up the devices, mount points, and filesystems for use
+// inside a new mount namespace. It doesn't set anything as ro or pivot_root,
+// because console setup happens inside the caller. You must call
+// finalizeRootfs in order to finish the rootfs setup.
+func prepareRootfs(config *configs.Config) (err error) {
 	if err := prepareRoot(config); err != nil {
 		return newSystemErrorWithCause(err, "preparing rootfs")
 	}
@@ -49,6 +50,7 @@ func setupRootfs(config *configs.Config, console *linuxConsole, pipe io.ReadWrit
 				return newSystemErrorWithCause(err, "running premount command")
 			}
 		}
+
 		if err := mountToRootfs(m, config.Rootfs, config.MountLabel); err != nil {
 			return newSystemErrorWithCausef(err, "mounting %q to rootfs %q at %q", m.Source, config.Rootfs, m.Destination)
 		}
@@ -59,27 +61,23 @@ func setupRootfs(config *configs.Config, console *linuxConsole, pipe io.ReadWrit
 			}
 		}
 	}
+
 	if setupDev {
 		if err := createDevices(config); err != nil {
 			return newSystemErrorWithCause(err, "creating device nodes")
 		}
-		if err := setupPtmx(config, console); err != nil {
+		if err := setupPtmx(config); err != nil {
 			return newSystemErrorWithCause(err, "setting up ptmx")
 		}
 		if err := setupDevSymlinks(config.Rootfs); err != nil {
 			return newSystemErrorWithCause(err, "setting up /dev symlinks")
 		}
 	}
-	// Signal the parent to run the pre-start hooks.
-	// The hooks are run after the mounts are setup, but before we switch to the new
-	// root, so that the old root is still available in the hooks for any mount
-	// manipulations.
-	if err := syncParentHooks(pipe); err != nil {
-		return err
-	}
+
 	if err := syscall.Chdir(config.Rootfs); err != nil {
 		return newSystemErrorWithCausef(err, "changing dir to %q", config.Rootfs)
 	}
+
 	if config.NoPivotRoot {
 		err = msMoveRoot(config.Rootfs)
 	} else {
@@ -88,11 +86,19 @@ func setupRootfs(config *configs.Config, console *linuxConsole, pipe io.ReadWrit
 	if err != nil {
 		return newSystemErrorWithCause(err, "jailing process inside rootfs")
 	}
+
 	if setupDev {
 		if err := reOpenDevNull(); err != nil {
 			return newSystemErrorWithCause(err, "reopening /dev/null inside container")
 		}
 	}
+
+	return nil
+}
+
+// finalizeRootfs actually switches the root of the process and sets anything
+// to ro if necessary. You must call prepareRootfs first.
+func finalizeRootfs(config *configs.Config) (err error) {
 	// remount dev as ro if specifed
 	for _, m := range config.Mounts {
 		if libcontainerUtils.CleanPath(m.Destination) == "/dev" {
@@ -104,12 +110,14 @@ func setupRootfs(config *configs.Config, console *linuxConsole, pipe io.ReadWrit
 			break
 		}
 	}
+
 	// set rootfs ( / ) as readonly
 	if config.Readonlyfs {
 		if err := setReadonly(); err != nil {
 			return newSystemErrorWithCause(err, "setting rootfs as readonly")
 		}
 	}
+
 	syscall.Umask(0022)
 	return nil
 }
@@ -552,16 +560,13 @@ func setReadonly() error {
 	return syscall.Mount("/", "/", "bind", syscall.MS_BIND|syscall.MS_REMOUNT|syscall.MS_RDONLY|syscall.MS_REC, "")
 }
 
-func setupPtmx(config *configs.Config, console *linuxConsole) error {
+func setupPtmx(config *configs.Config) error {
 	ptmx := filepath.Join(config.Rootfs, "dev/ptmx")
 	if err := os.Remove(ptmx); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	if err := os.Symlink("pts/ptmx", ptmx); err != nil {
 		return fmt.Errorf("symlink dev ptmx %s", err)
-	}
-	if console != nil {
-		return console.mount(config.Rootfs, config.MountLabel)
 	}
 	return nil
 }
