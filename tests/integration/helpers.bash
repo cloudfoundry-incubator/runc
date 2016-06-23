@@ -8,16 +8,63 @@ GOPATH="${INTEGRATION_ROOT}/../../../.."
 # Test data path.
 TESTDATA="${INTEGRATION_ROOT}/testdata"
 
-# Busybox image 
+# Busybox image
 BUSYBOX_IMAGE="$BATS_TMPDIR/busybox.tar"
 BUSYBOX_BUNDLE="$BATS_TMPDIR/busyboxtest"
 
-# hello-world in tar format 
+# hello-world in tar format
 HELLO_IMAGE="$TESTDATA/hello-world.tar"
 HELLO_BUNDLE="$BATS_TMPDIR/hello-world"
 
 # CRIU PATH
 CRIU="/usr/local/sbin/criu"
+
+# Kernel version
+KERNEL_VERSION="$(uname -r)"
+KERNEL_MAJOR="${KERNEL_VERSION%%.*}"
+KERNEL_MINOR="${KERNEL_VERSION#$KERNEL_MAJOR.}"
+KERNEL_MINOR="${KERNEL_MINOR%%.*}"
+
+# Root state path.
+ROOT="$BATS_TMPDIR/runc"
+
+# Wrapper for runc.
+function runc() {
+  run __runc "$@"
+
+  # Some debug information to make life easier. bats will only print it if the
+  # test failed, in which case the output is useful.
+  echo "runc $@ (status=$status):" >&2
+  echo "$output" >&2
+}
+
+# Raw wrapper for runc.
+function __runc() {
+  "$RUNC" --root "$ROOT" "$@"
+}
+
+# Fails the current test, providing the error given.
+function fail() {
+	echo "$@" >&2
+	exit 1
+}
+
+# Allows a test to specify what things it requires. If the environment can't
+# support it, the test is skipped with a message.
+function requires() {
+	for var in "$@"; do
+		case $var in
+			criu)
+				if [ ! -e "$CRIU" ]; then
+					skip "Test requires ${var}."
+				fi
+				;;
+			*)
+				fail "BUG: Invalid requires ${var}."
+				;;
+		esac
+	done
+}
 
 # Retry a command $1 times until it succeeds. Wait $2 seconds between retries.
 function retry() {
@@ -47,7 +94,7 @@ function wait_for_container() {
   local i
 
   for ((i=0; i < attempts; i++)); do
-    run "$RUNC" state $cid
+    runc state $cid
     if [[ "$status" -eq 0 ]] ; then
       return 0
     fi
@@ -66,7 +113,7 @@ function wait_for_container_inroot() {
   local i
 
   for ((i=0; i < attempts; i++)); do
-    run "$RUNC" --root $4 state $cid
+    ROOT=$4 runc state $cid
     if [[ "$status" -eq 0 ]] ; then
       return 0
     fi
@@ -78,50 +125,50 @@ function wait_for_container_inroot() {
 }
 
 function testcontainer() {
-  # test state of container 
-  run "$RUNC" state $1
+  # test state of container
+  runc state $1
   [ "$status" -eq 0 ]
   [[ "${output}" == *"$2"* ]]
 }
 
 function setup_busybox() {
-  run mkdir "$BUSYBOX_BUNDLE" 
+  run mkdir "$BUSYBOX_BUNDLE"
   run mkdir "$BUSYBOX_BUNDLE"/rootfs
   if [ -e "/testdata/busybox.tar" ]; then
     BUSYBOX_IMAGE="/testdata/busybox.tar"
   fi
   if [ ! -e $BUSYBOX_IMAGE ]; then
-    curl -o $BUSYBOX_IMAGE -sSL 'https://github.com/jpetazzo/docker-busybox/raw/buildroot-2014.11/rootfs.tar' 
+    curl -o $BUSYBOX_IMAGE -sSL 'https://github.com/jpetazzo/docker-busybox/raw/buildroot-2014.11/rootfs.tar'
   fi
   tar -C "$BUSYBOX_BUNDLE"/rootfs -xf "$BUSYBOX_IMAGE"
   cd "$BUSYBOX_BUNDLE"
-  run "$RUNC" spec
+  runc spec
 }
 
 function setup_hello() {
-  run mkdir "$HELLO_BUNDLE" 
+  run mkdir "$HELLO_BUNDLE"
   run mkdir "$HELLO_BUNDLE"/rootfs
   tar -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
   cd "$HELLO_BUNDLE"
-  "$RUNC" spec
+  runc spec
   sed -i 's;"sh";"/hello";' config.json
 }
 
 function teardown_running_container() {
-  run "$RUNC" list 
+  runc list
   if [[ "${output}" == *"$1"* ]]; then
-    run "$RUNC" kill $1 KILL
-    retry 10 1 eval "'$RUNC' state '$1' | grep -q 'destroyed'" 
-    run "$RUNC" delete $1
+    runc kill $1 KILL
+    retry 10 1 eval "__runc state '$1' | grep -q 'stopped'"
+    runc delete $1
   fi
 }
 
 function teardown_running_container_inroot() {
-  run "$RUNC" --root $2 list 
+  ROOT=$2 runc list
   if [[ "${output}" == *"$1"* ]]; then
-    run "$RUNC" --root $2 kill $1 KILL
-    retry 10 1 eval "'$RUNC' --root '$2' state '$1' | grep -q 'destroyed'" 
-    run "$RUNC" --root $2 delete $1
+    ROOT=$2 runc kill $1 KILL
+    retry 10 1 eval "ROOT='$2' __runc state '$1' | grep -q 'stopped'"
+    ROOT=$2 runc delete $1
   fi
 }
 

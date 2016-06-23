@@ -12,31 +12,31 @@ function teardown() {
 }
 
 @test "runc exec" {
-  # start busybox detached
-  run "$RUNC" start -d --console /dev/pts/ptmx test_busybox
+  # run busybox detached
+  runc run -d --console /dev/pts/ptmx test_busybox
   [ "$status" -eq 0 ]
 
   wait_for_container 15 1 test_busybox
 
-  run "$RUNC" exec test_busybox echo Hello from exec 
+  runc exec test_busybox echo Hello from exec
   [ "$status" -eq 0 ]
-  echo text echoed = "'""${output}""'" 
+  echo text echoed = "'""${output}""'"
   [[ "${output}" == *"Hello from exec"* ]]
 }
 
 @test "runc exec --pid-file" {
-  # start busybox detached
-  run "$RUNC" start -d --console /dev/pts/ptmx test_busybox
+  # run busybox detached
+  runc run -d --console /dev/pts/ptmx test_busybox
   [ "$status" -eq 0 ]
 
   wait_for_container 15 1 test_busybox
 
-  run "$RUNC" exec --pid-file pid.txt test_busybox echo Hello from exec 
+  runc exec --pid-file pid.txt test_busybox echo Hello from exec
   [ "$status" -eq 0 ]
-  echo text echoed = "'""${output}""'" 
+  echo text echoed = "'""${output}""'"
   [[ "${output}" == *"Hello from exec"* ]]
 
-  # check pid.txt was generated 
+  # check pid.txt was generated
   [ -e pid.txt ]
 
   run cat pid.txt

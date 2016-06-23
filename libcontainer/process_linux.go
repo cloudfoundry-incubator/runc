@@ -51,6 +51,7 @@ type setnsProcess struct {
 	fds           []string
 	process       *Process
 	bootstrapData io.Reader
+	rootDir       *os.File
 }
 
 func (p *setnsProcess) startTime() (string, error) {
@@ -69,6 +70,7 @@ func (p *setnsProcess) start() (err error) {
 	defer p.parentPipe.Close()
 	err = p.cmd.Start()
 	p.childPipe.Close()
+	p.rootDir.Close()
 	if err != nil {
 		return newSystemErrorWithCause(err, "starting setns process")
 	}
@@ -186,6 +188,7 @@ type initProcess struct {
 	process       *Process
 	bootstrapData io.Reader
 	sharePidns    bool
+	rootDir       *os.File
 }
 
 func (p *initProcess) pid() int {
@@ -221,6 +224,7 @@ func (p *initProcess) execSetns() error {
 		return err
 	}
 	p.cmd.Process = process
+	p.process.ops = p
 	return nil
 }
 
@@ -229,6 +233,7 @@ func (p *initProcess) start() error {
 	err := p.cmd.Start()
 	p.process.ops = p
 	p.childPipe.Close()
+	p.rootDir.Close()
 	if err != nil {
 		p.process.ops = nil
 		return newSystemErrorWithCause(err, "starting init process command")
@@ -447,7 +452,7 @@ func getPipeFds(pid int) ([]string, error) {
 
 // InitializeIO creates pipes for use with the process's STDIO
 // and returns the opposite side for each
-func (p *Process) InitializeIO(rootuid int) (i *IO, err error) {
+func (p *Process) InitializeIO(rootuid, rootgid int) (i *IO, err error) {
 	var fds []uintptr
 	i = &IO{}
 	// cleanup in case of an error
@@ -479,7 +484,7 @@ func (p *Process) InitializeIO(rootuid int) (i *IO, err error) {
 	p.Stderr, i.Stderr = w, r
 	// change ownership of the pipes incase we are in a user namespace
 	for _, fd := range fds {
-		if err := syscall.Fchown(int(fd), rootuid, rootuid); err != nil {
+		if err := syscall.Fchown(int(fd), rootuid, rootgid); err != nil {
 			return nil, err
 		}
 	}

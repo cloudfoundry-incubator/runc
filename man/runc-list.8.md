@@ -4,12 +4,6 @@
 # SYNOPSIS
    runc list [command options] [arguments...]
 
-# DESCRIPTION
-   The default format is table.  The following will output the list of containers
-in json format:
-
-    # runc list -f json
-
 # OPTIONS
-   --format, -f         select one of: table or json.
-   --quiet, -q          display only container IDs
+   --format value, -f value     select one of: table or json (default: "table")
+   --quiet, -q                  display only container IDs

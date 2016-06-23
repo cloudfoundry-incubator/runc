@@ -11,34 +11,34 @@ function teardown() {
   teardown_hello
 }
 
-@test "runc start" {
-  # start hello-world
-  run "$RUNC" start test_hello  
+@test "runc run" {
+  # run hello-world
+  runc run test_hello
   [ "$status" -eq 0 ]
-  
+
   # check expected output
   [[ "${output}" == *"Hello"* ]]
 }
 
-@test "runc start with rootfs set to ." {
+@test "runc run with rootfs set to ." {
   cp config.json rootfs/.
   rm config.json
   cd rootfs
   sed -i 's;"rootfs";".";' config.json
 
-  # start hello-world
-  run "$RUNC" start test_hello
+  # run hello-world
+  runc run test_hello
   [ "$status" -eq 0 ]
   [[ "${output}" == *"Hello"* ]]
 }
 
-@test "runc start --pid-file" {
-  # start hello-world
-  run "$RUNC" start --pid-file pid.txt test_hello
+@test "runc run --pid-file" {
+  # run hello-world
+  runc run --pid-file pid.txt test_hello
   [ "$status" -eq 0 ]
   [[ "${output}" == *"Hello"* ]]
-  
-  # check pid.txt was generated 
+
+  # check pid.txt was generated
   [ -e pid.txt ]
 
   run cat pid.txt

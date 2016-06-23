@@ -10,11 +10,12 @@ import (
 	"syscall"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/codegangsta/cli"
+	"github.com/coreos/go-systemd/activation"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/urfave/cli"
 )
 
 var errEmptyID = errors.New("container id cannot be empty")
@@ -92,7 +93,7 @@ func newProcess(p specs.Process) (*libcontainer.Process, error) {
 	return lp, nil
 }
 
-func dupStdio(process *libcontainer.Process, rootuid int) error {
+func dupStdio(process *libcontainer.Process, rootuid, rootgid int) error {
 	process.Stdin = os.Stdin
 	process.Stdout = os.Stdout
 	process.Stderr = os.Stderr
@@ -101,7 +102,7 @@ func dupStdio(process *libcontainer.Process, rootuid int) error {
 		os.Stdout.Fd(),
 		os.Stderr.Fd(),
 	} {
-		if err := syscall.Fchown(int(fd), rootuid, rootuid); err != nil {
+		if err := syscall.Fchown(int(fd), rootuid, rootgid); err != nil {
 			return err
 		}
 	}
@@ -123,22 +124,22 @@ func destroy(container libcontainer.Container) {
 
 // setupIO sets the proper IO on the process depending on the configuration
 // If there is a nil error then there must be a non nil tty returned
-func setupIO(process *libcontainer.Process, rootuid int, console string, createTTY, detach bool) (*tty, error) {
+func setupIO(process *libcontainer.Process, rootuid, rootgid int, console string, createTTY, detach bool) (*tty, error) {
 	// detach and createTty will not work unless a console path is passed
 	// so error out here before changing any terminal settings
 	if createTTY && detach && console == "" {
 		return nil, fmt.Errorf("cannot allocate tty if runc will detach")
 	}
 	if createTTY {
-		return createTty(process, rootuid, console)
+		return createTty(process, rootuid, rootgid, console)
 	}
 	if detach {
-		if err := dupStdio(process, rootuid); err != nil {
+		if err := dupStdio(process, rootuid, rootgid); err != nil {
 			return nil, err
 		}
 		return &tty{}, nil
 	}
-	return createStdioPipes(process, rootuid)
+	return createStdioPipes(process, rootuid, rootgid)
 }
 
 // createPidFile creates a file with the processes pid inside it atomically
@@ -170,6 +171,7 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcont
 		CgroupName:       id,
 		UseSystemdCgroup: context.GlobalBool("systemd-cgroup"),
 		NoPivotRoot:      context.Bool("no-pivot"),
+		NoNewKeyring:     context.Bool("no-new-keyring"),
 		Spec:             spec,
 	})
 	if err != nil {
@@ -201,6 +203,7 @@ type runner struct {
 	pidFile         string
 	console         string
 	container       libcontainer.Container
+	create          bool
 }
 
 func (r *runner) run(config *specs.Process) (int, error) {
@@ -218,13 +221,22 @@ func (r *runner) run(config *specs.Process) (int, error) {
 		r.destroy()
 		return -1, err
 	}
-	tty, err := setupIO(process, rootuid, r.console, config.Terminal, r.detach)
+	rootgid, err := r.container.Config().HostGID()
+	if err != nil {
+		r.destroy()
+		return -1, err
+	}
+	tty, err := setupIO(process, rootuid, rootgid, r.console, config.Terminal, r.detach || r.create)
 	if err != nil {
 		r.destroy()
 		return -1, err
 	}
 	handler := newSignalHandler(tty, r.enableSubreaper)
-	if err := r.container.Start(process); err != nil {
+	startFn := r.container.Start
+	if !r.create {
+		startFn = r.container.Run
+	}
+	if err := startFn(process); err != nil {
 		r.destroy()
 		tty.Close()
 		return -1, err
@@ -243,7 +255,7 @@ func (r *runner) run(config *specs.Process) (int, error) {
 			return -1, err
 		}
 	}
-	if r.detach {
+	if r.detach || r.create {
 		tty.Close()
 		return 0, nil
 	}
@@ -278,4 +290,32 @@ func validateProcessSpec(spec *specs.Process) error {
 		return fmt.Errorf("args must not be empty")
 	}
 	return nil
+}
+
+func startContainer(context *cli.Context, spec *specs.Spec, create bool) (int, error) {
+	id := context.Args().First()
+	if id == "" {
+		return -1, errEmptyID
+	}
+	container, err := createContainer(context, id, spec)
+	if err != nil {
+		return -1, err
+	}
+	detach := context.Bool("detach")
+	// Support on-demand socket activation by passing file descriptors into the container init process.
+	listenFDs := []*os.File{}
+	if os.Getenv("LISTEN_FDS") != "" {
+		listenFDs = activation.Files(false)
+	}
+	r := &runner{
+		enableSubreaper: !context.Bool("no-subreaper"),
+		shouldDestroy:   true,
+		container:       container,
+		listenFDs:       listenFDs,
+		console:         context.String("console"),
+		detach:          detach,
+		pidFile:         context.String("pid-file"),
+		create:          create,
+	}
+	return r.run(&spec.Process)
 }

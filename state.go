@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/codegangsta/cli"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/urfave/cli"
 )
 
 // cState represents the platform agnostic pieces relating to a running
@@ -30,6 +30,8 @@ type cState struct {
 	Status string `json:"status"`
 	// Created is the unix timestamp for the creation time of the container in UTC
 	Created time.Time `json:"created"`
+	// Annotations is the user defined annotations added to the config.
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 var stateCommand = cli.Command{
@@ -40,31 +42,35 @@ var stateCommand = cli.Command{
 Where "<container-id>" is your name for the instance of the container.`,
 	Description: `The state command outputs current state information for the
 instance of a container.`,
-	Action: func(context *cli.Context) {
+	Action: func(context *cli.Context) error {
 		container, err := getContainer(context)
 		if err != nil {
-			fatal(err)
+			return err
 		}
 		containerStatus, err := container.Status()
 		if err != nil {
-			fatal(err)
+			return err
 		}
 		state, err := container.State()
 		if err != nil {
-			fatal(err)
+			return err
 		}
+		bundle, annotations := utils.Annotations(state.Config.Labels)
 		cs := cState{
 			Version:        state.BaseState.Config.Version,
 			ID:             state.BaseState.ID,
 			InitProcessPid: state.BaseState.InitProcessPid,
 			Status:         containerStatus.String(),
-			Bundle:         utils.SearchLabels(state.Config.Labels, "bundle"),
+			Bundle:         bundle,
 			Rootfs:         state.BaseState.Config.Rootfs,
-			Created:        state.BaseState.Created}
+			Created:        state.BaseState.Created,
+			Annotations:    annotations,
+		}
 		data, err := json.MarshalIndent(cs, "", "  ")
 		if err != nil {
-			fatal(err)
+			return err
 		}
 		os.Stdout.Write(data)
+		return nil
 	},
 }

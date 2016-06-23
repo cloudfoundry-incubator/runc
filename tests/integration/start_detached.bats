@@ -11,9 +11,9 @@ function teardown() {
   teardown_busybox
 }
 
-@test "runc start detached" {
-  # start busybox detached
-  run "$RUNC" start -d --console /dev/pts/ptmx test_busybox
+@test "runc run detached" {
+  # run busybox detached
+  runc run -d --console /dev/pts/ptmx test_busybox
   [ "$status" -eq 0 ]
 
   # check state
@@ -22,9 +22,9 @@ function teardown() {
   testcontainer test_busybox running
 }
 
-@test "runc start detached --pid-file" {
-  # start busybox detached
-  run "$RUNC" start --pid-file pid.txt -d --console /dev/pts/ptmx test_busybox
+@test "runc run detached --pid-file" {
+  # run busybox detached
+  runc run --pid-file pid.txt -d --console /dev/pts/ptmx test_busybox
   [ "$status" -eq 0 ]
 
   # check state
@@ -32,7 +32,7 @@ function teardown() {
 
   testcontainer test_busybox running
 
-  # check pid.txt was generated 
+  # check pid.txt was generated
   [ -e pid.txt ]
 
   run cat pid.txt
