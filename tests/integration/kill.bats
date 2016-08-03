@@ -13,7 +13,6 @@ function teardown() {
 
 
 @test "kill detached busybox" {
-
   # run busybox detached
   runc run -d --console /dev/pts/ptmx test_busybox
   [ "$status" -eq 0 ]

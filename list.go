@@ -7,11 +7,13 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
 	"encoding/json"
 
+	"github.com/opencontainers/runc/libcontainer/user"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/urfave/cli"
 )
@@ -33,6 +35,8 @@ type containerState struct {
 	Created time.Time `json:"created"`
 	// Annotations is the user defined annotations added to the config.
 	Annotations map[string]string `json:"annotations,omitempty"`
+	// The owner of the state directory (the owner of the container).
+	Owner string `json:"owner"`
 }
 
 var listCommand = cli.Command{
@@ -65,14 +69,15 @@ var listCommand = cli.Command{
 		switch context.String("format") {
 		case "table":
 			w := tabwriter.NewWriter(os.Stdout, 12, 1, 3, ' ', 0)
-			fmt.Fprint(w, "ID\tPID\tSTATUS\tBUNDLE\tCREATED\n")
+			fmt.Fprint(w, "ID\tPID\tSTATUS\tBUNDLE\tCREATED\tOWNER\n")
 			for _, item := range s {
-				fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%s\n",
+				fmt.Fprintf(w, "%s\t%d\t%s\t%s\t%s\t%s\n",
 					item.ID,
 					item.InitProcessPid,
 					item.Status,
 					item.Bundle,
-					item.Created.Format(time.RFC3339Nano))
+					item.Created.Format(time.RFC3339Nano),
+					item.Owner)
 			}
 			if err := w.Flush(); err != nil {
 				return err
@@ -106,9 +111,25 @@ func getContainers(context *cli.Context) ([]containerState, error) {
 	var s []containerState
 	for _, item := range list {
 		if item.IsDir() {
+			// This cast is safe on Linux.
+			stat := item.Sys().(*syscall.Stat_t)
+			owner, err := user.LookupUid(int(stat.Uid))
+			if err != nil {
+				owner.Name = string(stat.Uid)
+			}
+
 			container, err := factory.Load(item.Name())
 			if err != nil {
-				return nil, err
+				// We can't error out here, because the current user may not
+				// have access to the container.
+				s = append(s, containerState{
+					ID:             item.Name(),
+					InitProcessPid: -1,
+					Status:         "-",
+					Bundle:         "-",
+					Owner:          owner.Name,
+				})
+				continue
 			}
 			containerStatus, err := container.Status()
 			if err != nil {
@@ -126,6 +147,7 @@ func getContainers(context *cli.Context) ([]containerState, error) {
 				Bundle:         bundle,
 				Created:        state.BaseState.Created,
 				Annotations:    annotations,
+				Owner:          owner.Name,
 			})
 		}
 	}

@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,6 +35,11 @@ checkpointed.`,
 		cli.StringSliceFlag{Name: "empty-ns", Usage: "create a namespace, but don't restore its properies"},
 	},
 	Action: func(context *cli.Context) error {
+		// XXX: Currently this is untested with rootless containers.
+		if os.Geteuid() != 0 {
+			return fmt.Errorf("runc checkpoint requires root")
+		}
+
 		container, err := getContainer(context)
 		if err != nil {
 			return err

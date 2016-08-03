@@ -82,7 +82,8 @@ func (p *setnsProcess) start() (err error) {
 	if err = p.execSetns(); err != nil {
 		return newSystemErrorWithCause(err, "executing setns process")
 	}
-	if len(p.cgroupPaths) > 0 {
+	// We can't join cgroups if we're in a rootless container.
+	if !p.config.Rootless && len(p.cgroupPaths) > 0 {
 		if err := cgroups.EnterPid(p.cgroupPaths, p.pid()); err != nil {
 			return newSystemErrorWithCausef(err, "adding pid %d to cgroups", p.pid())
 		}
@@ -252,8 +253,9 @@ func (p *initProcess) start() error {
 		return newSystemErrorWithCausef(err, "getting pipe fds for pid %d", p.pid())
 	}
 	p.setExternalDescriptors(fds)
-	// Do this before syncing with child so that no children
-	// can escape the cgroup
+	// Do this before syncing with child so that no children can escape the
+	// cgroup. We don't need to worry about not doing this and not being root
+	// because we'd be using the rootless cgroup manager in that case.
 	if err := p.manager.Apply(p.pid()); err != nil {
 		return newSystemErrorWithCause(err, "applying cgroup configuration for process")
 	}
