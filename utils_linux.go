@@ -134,9 +134,12 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, console string
 		return createTty(process, rootuid, rootgid, console)
 	}
 	if detach {
-		if err := dupStdio(process, rootuid, rootgid); err != nil {
-			return nil, err
-		}
+		// HACK: dupStdio calls syscall.Fchown(0, 1000, 1000)
+		// which results in "operation not permitted"
+		// commenting this out for now
+		// if err := dupStdio(process, rootuid, rootgid); err != nil {
+		// 	return nil, err
+		// }
 		return &tty{}, nil
 	}
 	return createStdioPipes(process, rootuid, rootgid)
