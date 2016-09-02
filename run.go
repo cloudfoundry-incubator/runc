@@ -31,6 +31,11 @@ command(s) that get executed on start, edit the args parameter of the spec. See
 			Value: "",
 			Usage: `path to the root of the bundle directory, defaults to the current directory`,
 		},
+		cli.StringFlag{
+			Name:  "console-socket",
+			Value: "",
+			Usage: "specify an AF_UNIX socket to send the master fd through",
+		},
 		cli.BoolFlag{
 			Name:  "detach, d",
 			Usage: "detach from the container's process",

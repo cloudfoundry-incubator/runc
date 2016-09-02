@@ -1,6 +1,9 @@
 package libcontainer
 
-import "io"
+import (
+	"io"
+	"os"
+)
 
 // Console represents a pseudo TTY.
 type Console interface {
@@ -11,8 +14,5 @@ type Console interface {
 	Path() string
 
 	// Fd returns the fd for the master of the pty.
-	Fd() uintptr
+	File() *os.File
 }
-
-// ConsoleData represents arbitrary setup data used when setting up console
-// handling. It is

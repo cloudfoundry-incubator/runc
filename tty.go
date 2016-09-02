@@ -131,5 +131,5 @@ func (t *tty) resize() error {
 	if err != nil {
 		return err
 	}
-	return term.SetWinsize(t.console.Fd(), ws)
+	return term.SetWinsize(t.console.File().Fd(), ws)
 }
