@@ -1,7 +1,8 @@
-.PHONY: dbuild man \
+.PHONY: all dbuild man \
 	    localtest localunittest localintegration \
 	    test unittest integration
 
+SOURCES := $(shell find . | grep -E '.*\.(c|h|go)$$')
 PREFIX := $(DESTDIR)/usr/local
 BINDIR := $(PREFIX)/sbin
 GIT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -28,11 +29,17 @@ VERSION := ${shell cat ./VERSION}
 
 SHELL ?= $(shell command -v bash 2>/dev/null)
 
-all: $(RUNC_LINK)
+runc: $(SOURCES) $(RUNC_LINK)
 	go build -i -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION}" -tags "$(BUILDTAGS)" -o runc .
+
+recvtty: $(SOURCES) $(RUNC_LINK)
+	go build -i -ldflags "-X main.gitCommit=${COMMIT} -X main.version=${VERSION}" -tags "$(BUILDTAGS)" -o recvtty ./contrib/cmd/recvtty
+
+all: runc recvtty
 
 static: $(RUNC_LINK)
 	CGO_ENABLED=1 go build -i -tags "$(BUILDTAGS) cgo static_build" -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION}" -o runc .
+	CGO_ENABLED=1 go build -i -tags "$(BUILDTAGS) cgo static_build" -ldflags "-w -extldflags -static -X main.gitCommit=${COMMIT} -X main.version=${VERSION}" -o recvtty ./contrib/cmd/recvtty
 
 release: $(RUNC_LINK)
 	@flag_list=(seccomp selinux apparmor static); \
@@ -64,7 +71,7 @@ $(RUNC_LINK):
 	ln -sfn $(CURDIR) $(RUNC_LINK)
 
 dbuild: runcimage
-	docker run --name=$(RUNC_INSTANCE) $(RUNC_IMAGE) make
+	docker run --name=$(RUNC_INSTANCE) $(RUNC_IMAGE) make all
 	docker cp $(RUNC_INSTANCE):$(RUNC_BUILD_PATH) .
 	docker rm $(RUNC_INSTANCE)
 
@@ -117,6 +124,7 @@ uninstall-man:
 
 clean:
 	rm -f runc
+	rm -f recvtty
 	rm -f $(RUNC_LINK)
 	rm -rf $(GOPATH)/pkg
 	rm -rf $(RELEASE_DIR)
