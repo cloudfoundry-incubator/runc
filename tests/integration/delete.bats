@@ -13,7 +13,7 @@ function teardown() {
 
 @test "runc delete" {
   # run busybox detached
-  runc run -d --console /dev/pts/ptmx test_busybox
+  runc run -d --console-socket $CONSOLE_SOCKET test_busybox
   [ "$status" -eq 0 ]
 
   # check state
@@ -34,7 +34,7 @@ function teardown() {
 
 @test "runc delete --force" {
   # run busybox detached
-  runc run -d --console /dev/pts/ptmx test_busybox
+  runc run -d --console-socket $CONSOLE_SOCKET test_busybox
   [ "$status" -eq 0 ]
 
   # check state

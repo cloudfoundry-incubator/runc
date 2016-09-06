@@ -3,6 +3,7 @@
 # Root directory of integration tests.
 INTEGRATION_ROOT=$(dirname "$(readlink -f "$BASH_SOURCE")")
 RUNC="${INTEGRATION_ROOT}/../../runc"
+RECVTTY="${INTEGRATION_ROOT}/../../recvtty"
 GOPATH="${INTEGRATION_ROOT}/../../../.."
 
 # Test data path.
@@ -27,6 +28,9 @@ KERNEL_MINOR="${KERNEL_MINOR%%.*}"
 
 # Root state path.
 ROOT="$BATS_TMPDIR/runc"
+
+# Path to console socket.
+CONSOLE_SOCKET="$BATS_TMPDIR/console.sock"
 
 # Cgroup mount
 CGROUP_BASE_PATH=$(grep "cgroup"  /proc/self/mountinfo | gawk 'toupper($NF) ~ /\<MEMORY\>/ { print $5; exit }')
@@ -142,7 +146,25 @@ function testcontainer() {
   [[ "${output}" == *"$2"* ]]
 }
 
+function setup_recvtty() {
+	# Clean up the console socket.
+	rm -f "$BATS_TMPDIR/recvtty.pid"
+	rm -f "$CONSOLE_SOCKET"
+
+	# We need to start recvtty in the background, so we double fork in the shell.
+	( "$RECVTTY" --pid-file "$BATS_TMPDIR/recvtty.pid" --mode null "$CONSOLE_SOCKET" & ) &
+}
+
+function teardown_recvtty() {
+	if [ -f "$BATS_TMPDIR/recvtty.pid" ]; then
+		kill -9 $(cat "$BATS_TMPDIR/recvtty.pid")
+	fi
+	rm -f "$BATS_TMPDIR/recvtty.pid"
+	rm -f "$CONSOLE_SOCKET"
+}
+
 function setup_busybox() {
+  setup_recvtty
   run mkdir "$BUSYBOX_BUNDLE"
   run mkdir "$BUSYBOX_BUNDLE"/rootfs
   if [ -e "/testdata/busybox.tar" ]; then
@@ -157,6 +179,7 @@ function setup_busybox() {
 }
 
 function setup_hello() {
+  setup_recvtty
   run mkdir "$HELLO_BUNDLE"
   run mkdir "$HELLO_BUNDLE"/rootfs
   tar -C "$HELLO_BUNDLE"/rootfs -xf "$HELLO_IMAGE"
@@ -185,12 +208,14 @@ function teardown_running_container_inroot() {
 
 function teardown_busybox() {
   cd "$INTEGRATION_ROOT"
+  teardown_recvtty
   teardown_running_container test_busybox
   run rm -f -r "$BUSYBOX_BUNDLE"
 }
 
 function teardown_hello() {
   cd "$INTEGRATION_ROOT"
+  teardown_recvtty
   teardown_running_container test_hello
   run rm -f -r "$HELLO_BUNDLE"
 }

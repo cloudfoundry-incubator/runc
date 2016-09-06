@@ -103,6 +103,9 @@ integration: runcimage
 localintegration: all
 	bats -t tests/integration${TESTFLAGS}
 
+shell: all
+	docker run -e TESTFLAGS -ti --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) bash
+
 install:
 	install -D -m0755 runc $(BINDIR)/runc
 
