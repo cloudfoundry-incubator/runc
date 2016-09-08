@@ -16,7 +16,6 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"github.com/opencontainers/runc/libcontainer/specconv"
-	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -194,6 +193,10 @@ type runner struct {
 	create          bool
 }
 
+func (r *runner) terminalinfo() *libcontainer.TerminalInfo {
+	return libcontainer.NewTerminalInfo(r.container.ID())
+}
+
 func (r *runner) run(config *specs.Process) (int, error) {
 	process, err := newProcess(*config)
 	if err != nil {
@@ -259,24 +262,31 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	if config.Terminal && detach {
 		conn, err := net.Dial("unix", r.consoleSocket)
 		if err != nil {
+			r.terminate(process)
+			r.destroy()
 			return -1, err
 		}
 		defer conn.Close()
 
 		unixconn, ok := conn.(*net.UnixConn)
 		if !ok {
+			r.terminate(process)
+			r.destroy()
 			return -1, fmt.Errorf("casting to UnixConn failed")
 		}
 
 		socket, err := unixconn.File()
 		if err != nil {
+			r.terminate(process)
+			r.destroy()
 			return -1, err
 		}
 		defer socket.Close()
 
-		// TODO: Add some metadata along with this, so the reciever knows what
-		//       on earth is going on.
-		if err := utils.SendFd(socket, tty.console.File()); err != nil {
+		err = tty.sendtty(socket, r.terminalinfo())
+		if err != nil {
+			r.terminate(process)
+			r.destroy()
 			return -1, err
 		}
 	}

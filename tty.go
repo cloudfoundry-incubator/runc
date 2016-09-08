@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/docker/pkg/term"
 	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/utils"
 )
 
 type tty struct {
@@ -93,6 +94,19 @@ func (t *tty) recvtty(process *libcontainer.Process) error {
 	t.console = console
 	t.state = state
 	t.closers = []io.Closer{console}
+	return nil
+}
+
+func (t *tty) sendtty(socket *os.File, ti *libcontainer.TerminalInfo) error {
+	if t.console == nil {
+		return fmt.Errorf("tty.console not set")
+	}
+
+	// Create a fake file to contain the terminal info.
+	console := os.NewFile(t.console.File().Fd(), ti.String())
+	if err := utils.SendFd(socket, console); err != nil {
+		return err
+	}
 	return nil
 }
 
