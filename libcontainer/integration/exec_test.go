@@ -199,17 +199,6 @@ func testRlimit(t *testing.T, userns bool) {
 	}
 }
 
-func newTestRoot() (string, error) {
-	dir, err := ioutil.TempDir("", "libcontainer")
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", err
-	}
-	return dir, nil
-}
-
 func TestEnter(t *testing.T) {
 	if testing.Short() {
 		return
@@ -431,7 +420,6 @@ func TestAdditionalGroups(t *testing.T) {
 	defer remove(rootfs)
 
 	config := newTemplateConfig(rootfs)
-	config.AdditionalGroups = []string{"plugdev", "audio"}
 
 	factory, err := libcontainer.New(root, libcontainer.Cgroupfs)
 	ok(t, err)
@@ -442,11 +430,12 @@ func TestAdditionalGroups(t *testing.T) {
 
 	var stdout bytes.Buffer
 	pconfig := libcontainer.Process{
-		Cwd:    "/",
-		Args:   []string{"sh", "-c", "id", "-Gn"},
-		Env:    standardEnvironment,
-		Stdin:  nil,
-		Stdout: &stdout,
+		Cwd:              "/",
+		Args:             []string{"sh", "-c", "id", "-Gn"},
+		Env:              standardEnvironment,
+		Stdin:            nil,
+		Stdout:           &stdout,
+		AdditionalGroups: []string{"plugdev", "audio"},
 	}
 	err = container.Run(&pconfig)
 	ok(t, err)
@@ -1139,7 +1128,7 @@ func TestHook(t *testing.T) {
 	}
 
 	if err := container.Destroy(); err != nil {
-		t.Fatalf("container destory %s", err)
+		t.Fatalf("container destroy %s", err)
 	}
 	fi, err := os.Stat(filepath.Join(rootfs, "test"))
 	if err == nil || !os.IsNotExist(err) {

@@ -12,6 +12,7 @@ import (
 
 	"encoding/json"
 
+	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/urfave/cli"
 )
@@ -38,6 +39,18 @@ type containerState struct {
 var listCommand = cli.Command{
 	Name:  "list",
 	Usage: "lists containers started by runc with the given root",
+	ArgsUsage: `
+
+Where the given root is specified via the global option "--root"
+(default: "/run/runc").
+
+EXAMPLE 1:
+To list containers created via the default "--root":
+       # runc list
+
+EXAMPLE 2:
+To list containers created using a non-default value for "--root":
+       # runc --root value list`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "format, f",
@@ -118,10 +131,14 @@ func getContainers(context *cli.Context) ([]containerState, error) {
 			if err != nil {
 				return nil, err
 			}
+			pid := state.BaseState.InitProcessPid
+			if containerStatus == libcontainer.Stopped {
+				pid = 0
+			}
 			bundle, annotations := utils.Annotations(state.Config.Labels)
 			s = append(s, containerState{
 				ID:             state.BaseState.ID,
-				InitProcessPid: state.BaseState.InitProcessPid,
+				InitProcessPid: pid,
 				Status:         containerStatus.String(),
 				Bundle:         bundle,
 				Created:        state.BaseState.Created,
