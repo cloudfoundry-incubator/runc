@@ -77,7 +77,9 @@ func newContainerInit(t initType, pipe *os.File, stateDirFD int) (initer, error)
 	switch t {
 	case initSetns:
 		return &linuxSetnsInit{
-			config: config,
+			pipe:       pipe,
+			config:     config,
+			stateDirFD: stateDirFD,
 		}, nil
 	case initStandard:
 		return &linuxStandardInit{
