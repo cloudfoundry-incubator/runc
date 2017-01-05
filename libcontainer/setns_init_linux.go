@@ -5,6 +5,8 @@ package libcontainer
 import (
 	"fmt"
 	"os"
+	"strconv"
+	"syscall"
 
 	"github.com/opencontainers/runc/libcontainer/apparmor"
 	"github.com/opencontainers/runc/libcontainer/keys"
@@ -58,5 +60,25 @@ func (l *linuxSetnsInit) Init() error {
 	if err := label.SetProcessLabel(l.config.ProcessLabel); err != nil {
 		return err
 	}
+
+	stdoutFd := os.Getenv("STDOUT_FD")
+	if len(stdoutFd) > 0 {
+		outFd, _ := strconv.Atoi(stdoutFd)
+		syscall.Dup2(1, outFd)
+	}
+
+	stderrFd := os.Getenv("STDERR_FD")
+	if len(stderrFd) > 0 {
+		println("errorFD: ", stderrFd)
+		errFd, err := strconv.Atoi(stderrFd)
+		if err != nil {
+			println("ERRRRRRRRRRRRR1", err.Error())
+		}
+		err = syscall.Dup2(errFd, 2)
+		if err != nil {
+			println("ERRRRRRRRRRRRR2", err.Error())
+		}
+	}
+
 	return system.Execv(l.config.Args[0], l.config.Args[0:], os.Environ())
 }

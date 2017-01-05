@@ -181,6 +181,8 @@ type runner struct {
 	detach          bool
 	listenFDs       []*os.File
 	pidFile         string
+	stdoutFile      string
+	stderrFile      string
 	consoleSocket   string
 	container       libcontainer.Container
 	create          bool
@@ -199,6 +201,19 @@ func (r *runner) run(config *specs.Process) (int, error) {
 	if len(r.listenFDs) > 0 {
 		process.Env = append(process.Env, fmt.Sprintf("LISTEN_FDS=%d", len(r.listenFDs)), "LISTEN_PID=1")
 		process.ExtraFiles = append(process.ExtraFiles, r.listenFDs...)
+	}
+
+	if len(r.stdoutFile) > 0 {
+		stdoutFD, _ := os.OpenFile(r.stdoutFile, os.O_WRONLY|os.O_APPEND, 0600)
+		process.Env = append(process.Env, fmt.Sprintf("STDOUT_FD=%d", len(process.ExtraFiles)+3))
+		process.ExtraFiles = append(process.ExtraFiles, stdoutFD)
+	}
+
+	if len(r.stderrFile) > 0 {
+		stderrFD, _ := os.OpenFile(r.stderrFile, os.O_WRONLY|os.O_APPEND, 0600)
+		// stderrFD := os.NewFile(uintptr(len(process.ExtraFiles)+3), r.stderrFile)
+		process.Env = append(process.Env, fmt.Sprintf("STDERR_FD=%d", len(process.ExtraFiles)+3))
+		process.ExtraFiles = append(process.ExtraFiles, stderrFD)
 	}
 
 	rootuid, err := r.container.Config().HostUID()
