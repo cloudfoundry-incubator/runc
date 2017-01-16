@@ -431,6 +431,8 @@ func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
 	 */
 	if process.Stdin == nil && process.Stdout == nil && process.Stderr == nil {
 		cfg.CreateConsole = true
+		cfg.ConsoleWidth = process.ConsoleWidth
+		cfg.ConsoleHeight = process.ConsoleHeight
 	}
 	return cfg
 }
