@@ -5,16 +5,21 @@ import (
 	"os"
 	"syscall"
 	"unsafe"
+
+	"github.com/docker/docker/pkg/term"
 )
 
 // newConsole returns an initialized console that can be used within a container by copying bytes
 // from the master side to the slave that is attached as the tty for the container's init process.
-func newConsole() (Console, error) {
+func newConsole(width, height uint16) (Console, error) {
 	master, err := os.OpenFile("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
 	if err := saneTerminal(master); err != nil {
+		return nil, err
+	}
+	if err := term.SetWinsize(master.Fd(), &term.Winsize{Height: height, Width: width}); err != nil {
 		return nil, err
 	}
 	console, err := ptsname(master)

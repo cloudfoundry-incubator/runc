@@ -60,6 +60,8 @@ type initConfig struct {
 	Rlimits          []configs.Rlimit `json:"rlimits"`
 	ExecFifoPath     string           `json:"start_pipe_path"`
 	CreateConsole    bool             `json:"create_console"`
+	ConsoleWidth     uint16           `json:"console_width"`
+	ConsoleHeight    uint16           `json:"console_height"`
 }
 
 type initer interface {
@@ -165,7 +167,7 @@ func setupConsole(pipe *os.File, config *initConfig, mount bool) error {
 	// however, that setupUser (specifically fixStdioPermissions) *will* change
 	// the UID owner of the console to be the user the process will run as (so
 	// they can actually control their console).
-	console, err := newConsole()
+	console, err := newConsole(config.ConsoleWidth, config.ConsoleHeight)
 	if err != nil {
 		return err
 	}

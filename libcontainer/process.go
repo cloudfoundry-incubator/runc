@@ -51,6 +51,10 @@ type Process struct {
 	// TODO: Make this persistent in Process.
 	consoleChan chan *os.File
 
+	// Initial sizings for the console
+	ConsoleWidth  uint16
+	ConsoleHeight uint16
+
 	// Capabilities specify the capabilities to keep when executing the process inside the container
 	// All capabilities not specified will be dropped from the processes capability mask
 	Capabilities []string

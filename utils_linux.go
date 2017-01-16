@@ -81,6 +81,8 @@ func newProcess(p specs.Process) (*libcontainer.Process, error) {
 		Label:           p.SelinuxLabel,
 		NoNewPrivileges: &p.NoNewPrivileges,
 		AppArmorProfile: p.ApparmorProfile,
+		ConsoleWidth:    uint16(p.ConsoleSize.Width),
+		ConsoleHeight:   uint16(p.ConsoleSize.Height),
 	}
 	for _, gid := range p.User.AdditionalGids {
 		lp.AdditionalGroups = append(lp.AdditionalGroups, strconv.FormatUint(uint64(gid), 10))
