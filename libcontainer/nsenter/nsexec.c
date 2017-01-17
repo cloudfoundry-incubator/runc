@@ -432,9 +432,8 @@ void nsexec(void)
 		return;
 
 	/* make the process non-dumpable */
-	if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0) {
+	if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
 		bail("failed to set process as non-dumpable");
-	}
 
 	/* Parse all of the netlink configuration. */
 	nl_parse(pipenum, &config);
@@ -699,6 +698,8 @@ void nsexec(void)
 				 * clone_parent rant). So signal our parent to hook us up.
 				 */
 
+				if (prctl(PR_SET_DUMPABLE, 1, 0, 0, 0) < 0)
+					bail("failed to set process as dumpable");
 				s = SYNC_USERMAP_PLS;
 				if (write(syncfd, &s, sizeof(s)) != sizeof(s))
 					bail("failed to sync with parent: write(SYNC_USERMAP_PLS)");
@@ -709,6 +710,8 @@ void nsexec(void)
 					bail("failed to sync with parent: read(SYNC_USERMAP_ACK)");
 				if (s != SYNC_USERMAP_ACK)
 					bail("failed to sync with parent: SYNC_USERMAP_ACK: got %u", s);
+				if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) < 0)
+					bail("failed to set process as non-dumpable");
 			}
 
 			/*

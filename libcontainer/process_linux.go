@@ -80,18 +80,24 @@ func (p *setnsProcess) start() (err error) {
 	if err = p.execSetns(); err != nil {
 		return newSystemErrorWithCause(err, "executing setns process")
 	}
-	// We can't join cgroups if we're in a rootless container.
-	if !p.config.Rootless && len(p.cgroupPaths) > 0 {
-		if err := cgroups.EnterPid(p.cgroupPaths, p.pid()); err != nil {
-			return newSystemErrorWithCausef(err, "adding pid %d to cgroups", p.pid())
+	if !p.config.Rootless {
+		// We can't join cgroups if we're in a rootless container.
+		if len(p.cgroupPaths) > 0 {
+			if err := cgroups.EnterPid(p.cgroupPaths, p.pid()); err != nil {
+				return newSystemErrorWithCausef(err, "adding pid %d to cgroups", p.pid())
+			}
+		}
+
+		// Set oom_score_adj. Cannot be done in rootless containers because
+		// mm->dumpable means that no unprivileged process can write to
+		// /proc/self/oom_score_adj for the container process.
+		if err := setOomScoreAdj(p.config.Config.OomScoreAdj, p.pid()); err != nil {
+			return newSystemErrorWithCause(err, "setting oom score")
 		}
 	}
-	// set oom_score_adj
-	if err := setOomScoreAdj(p.config.Config.OomScoreAdj, p.pid()); err != nil {
-		return newSystemErrorWithCause(err, "setting oom score")
-	}
-	// set rlimits, this has to be done here because we lose permissions
-	// to raise the limits once we enter a user-namespace
+
+	// Set rlimits, this has to be done here because we lose permissions
+	// to raise the limits once we enter a user-namespace.
 	if err := setupRlimits(p.config.Rlimits, p.pid()); err != nil {
 		return newSystemErrorWithCause(err, "setting rlimits for process")
 	}
@@ -326,9 +332,13 @@ func (p *initProcess) start() error {
 			if err := p.manager.Set(p.config.Config); err != nil {
 				return newSystemErrorWithCause(err, "setting cgroup config for ready process")
 			}
-			// set oom_score_adj
-			if err := setOomScoreAdj(p.config.Config.OomScoreAdj, p.pid()); err != nil {
-				return newSystemErrorWithCause(err, "setting oom score for ready process")
+			if !p.config.Rootless {
+				// Set oom_score_adj. Cannot be done in rootless containers because
+				// mm->dumpable means that no unprivileged process can write to
+				// /proc/self/oom_score_adj for the container process.
+				if err := setOomScoreAdj(p.config.Config.OomScoreAdj, p.pid()); err != nil {
+					return newSystemErrorWithCause(err, "setting oom score for ready process")
+				}
 			}
 			// set rlimits, this has to be done here because we lose permissions
 			// to raise the limits once we enter a user-namespace
@@ -473,6 +483,12 @@ func getPipeFds(pid int) ([]string, error) {
 		f := filepath.Join(dirPath, strconv.Itoa(i))
 		target, err := os.Readlink(f)
 		if err != nil {
+			// Ignore permission errors, for rootless containers and other
+			// non-dumpable processes. if we can't get the fd for a particular
+			// file, there's not much we can do.
+			if os.IsPermission(err) {
+				continue
+			}
 			return fds, err
 		}
 		fds[i] = target
