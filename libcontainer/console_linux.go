@@ -2,6 +2,7 @@ package libcontainer
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"syscall"
 	"unsafe"
@@ -15,12 +16,15 @@ func ConsoleFromFile(f *os.File) Console {
 
 // newConsole returns an initialized console that can be used within a container by copying bytes
 // from the master side to the slave that is attached as the tty for the container's init process.
-func newConsole() (Console, error) {
+func newConsole(width, height uint) (Console, error) {
 	master, err := os.OpenFile("/dev/ptmx", syscall.O_RDWR|syscall.O_NOCTTY|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
 	if err := saneTerminal(master); err != nil {
+		return nil, err
+	}
+	if err := setWinSize(master.Fd(), width, height); err != nil {
 		return nil, err
 	}
 	console, err := ptsname(master)
@@ -153,4 +157,26 @@ func saneTerminal(terminal *os.File) error {
 	}
 
 	return nil
+}
+
+func setWinSize(fd uintptr, width, height uint) error {
+	if width > math.MaxUint16 || height > math.MaxUint16 {
+		return fmt.Errorf("console width (%d) or height (%d) cannot be larger than %d", width, height, math.MaxUint16)
+	}
+
+	_, _, err := syscall.Syscall(
+		syscall.SYS_IOCTL,
+		fd,
+		uintptr(syscall.TIOCSWINSZ),
+		uintptr(unsafe.Pointer(&struct {
+			Height uint16
+			Width  uint16
+		}{Height: uint16(height), Width: uint16(width)})),
+	)
+
+	// Skip errno = 0
+	if err == 0 {
+		return nil
+	}
+	return err
 }
