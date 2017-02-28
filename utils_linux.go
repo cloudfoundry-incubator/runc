@@ -115,7 +115,7 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// requirement that we set up anything nice for our caller or the
 	// container.
 	if detach {
-		if err := dupStdio(process, rootuid, rootgid); err != nil {
+		if err := nullStdio(process); err != nil {
 			return nil, err
 		}
 		return &tty{}, nil
@@ -149,6 +149,11 @@ func createPidFile(path string, process *libcontainer.Process) error {
 	return os.Rename(tmpName, path)
 }
 
+// XXX: Currently we autodetect rootless mode.
+func isRootless() bool {
+	return os.Geteuid() != 0
+}
+
 func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcontainer.Container, error) {
 	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
 		CgroupName:       id,
@@ -156,6 +161,7 @@ func createContainer(context *cli.Context, id string, spec *specs.Spec) (libcont
 		NoPivotRoot:      context.Bool("no-pivot"),
 		NoNewKeyring:     context.Bool("no-new-keyring"),
 		Spec:             spec,
+		Rootless:         isRootless(),
 	})
 	if err != nil {
 		return nil, err
