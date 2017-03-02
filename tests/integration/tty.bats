@@ -125,3 +125,99 @@ function teardown() {
 	[[ ${lines[0]} =~ 1000 ]]
 	[[ ${lines[1]} =~ 5 ]]
 }
+
+@test "runc exec [tty consolesize]" {
+	# allow writing to filesystem
+	sed -i 's/"readonly": true/"readonly": false/' config.json
+
+	# run busybox detached
+	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	[ "$status" -eq 0 ]
+
+	# check state
+	wait_for_container 15 1 test_busybox
+
+	# make sure we're running
+	testcontainer test_busybox running
+
+# write a process.json that prints tty info to a file
+cat <<EOF > $BATS_TMPDIR/write-tty-info.json
+{
+	"terminal": true,
+	"consoleSize": {
+		"height": 10,
+		"width": 110
+	},
+	"args": [
+		"/bin/sh",
+		"-c",
+		"/bin/stty -a > $BATS_TMPDIR/tty-info"
+	],
+        "cwd": "/"
+}
+EOF
+
+	# run the exec
+	runc exec --pid-file pid.txt -d --console-socket $CONSOLE_SOCKET -p $BATS_TMPDIR/write-tty-info.json test_busybox
+	[ "$status" -eq 0 ]
+
+	# check the pid was generated
+	[ -e pid.txt ]
+
+	#wait user process to finish
+	timeout 1 tail --pid=$(head -n 1 pid.txt) -f /dev/null
+
+# write a process.json that echoes the tty file info
+cat <<EOF >> $BATS_TMPDIR/read-tty-info.json
+{
+	"args": [
+	    "/bin/cat",
+	    "$BATS_TMPDIR/tty-info"
+	],
+        "cwd": "/"
+}
+EOF
+
+	# run the exec
+	runc exec -p $BATS_TMPDIR/read-tty-info.json test_busybox
+	[ "$status" -eq 0 ]
+
+	# test tty width and height against original process.json
+	[[ ${lines[0]} =~ "rows 10; columns 110" ]]
+
+	# clean process.jsons
+	rm $BATS_TMPDIR/write-tty-info.json
+	rm $BATS_TMPDIR/read-tty-info.json
+}
+
+@test "runc exec [tty consolesize] (width && height > max)" {
+	# run busybox detached
+	runc run -d --console-socket $CONSOLE_SOCKET test_busybox
+	[ "$status" -eq 0 ]
+
+	# check state
+	wait_for_container 15 1 test_busybox
+
+	# make sure we're running
+	testcontainer test_busybox running
+
+# write a process.json that prints tty info to a file
+cat <<EOF > $BATS_TMPDIR/process.json
+{
+	"terminal": true,
+	"consoleSize": {
+		"height": 100000,
+		"width": 500000
+	},
+	"args": [
+		"/bin/true"
+	],
+        "cwd": "/"
+}
+EOF
+
+	# run the exec
+	runc exec --pid-file pid.txt -d --console-socket $CONSOLE_SOCKET -p $BATS_TMPDIR/process.json test_busybox
+	[ "$status" -ne 0 ]
+	[[ ${lines[0]} =~ "console width (500000) or height (100000) cannot be larger than 65535" ]]
+}
