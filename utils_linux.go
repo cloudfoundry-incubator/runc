@@ -115,7 +115,7 @@ func setupIO(process *libcontainer.Process, rootuid, rootgid int, createTTY, det
 	// requirement that we set up anything nice for our caller or the
 	// container.
 	if detach {
-		if err := nullStdio(process); err != nil {
+		if err := dupStdio(process, rootuid, rootgid); err != nil {
 			return nil, err
 		}
 		return &tty{}, nil
