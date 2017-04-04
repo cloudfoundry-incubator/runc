@@ -472,7 +472,19 @@ func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
 	if len(process.Rlimits) > 0 {
 		cfg.Rlimits = process.Rlimits
 	}
-	cfg.CreateConsole = process.ConsoleSocket != nil
+	/*
+	 * TODO: This should not be automatically computed. We should implement
+	 *       this as a field in libcontainer.Process, and then we only dup the
+	 *       new console over the file descriptors which were not explicitly
+	 *       set with process.Std{in,out,err}. The reason I've left this as-is
+	 *       is because the GetConsole() interface is new, there's no need to
+	 *       polish this interface right now.
+	 */
+	if process.ConsoleSocket != nil && process.Stdin == nil && process.Stdout == nil && process.Stderr == nil {
+		cfg.CreateConsole = true
+		cfg.ConsoleWidth = process.ConsoleWidth
+		cfg.ConsoleHeight = process.ConsoleHeight
+	}
 	return cfg
 }
 
