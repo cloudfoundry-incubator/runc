@@ -39,6 +39,8 @@ type linuxContainer struct {
 	initProcess          parentProcess
 	initProcessStartTime string
 	criuPath             string
+	newuidmapPath        string
+	newgidmapPath        string
 	m                    sync.Mutex
 	criuVersion          int
 	state                containerState
@@ -1457,6 +1459,10 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 				Type:  UidmapAttr,
 				Value: b,
 			})
+			r.AddData(&Bytemsg{
+				Type:  UidmapPathAttr,
+				Value: []byte(c.newuidmapPath),
+			})
 		}
 
 		// write gid mappings
@@ -1468,6 +1474,10 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 			r.AddData(&Bytemsg{
 				Type:  GidmapAttr,
 				Value: b,
+			})
+			r.AddData(&Bytemsg{
+				Type:  GidmapPathAttr,
+				Value: []byte(c.newgidmapPath),
 			})
 			// The following only applies if we are root.
 			if !c.config.Rootless {

@@ -111,6 +111,24 @@ func CriuPath(criupath string) func(*LinuxFactory) error {
 	}
 }
 
+// NewuidmapPath returns an option func to configure a LinuxFactory with the
+// provided ..
+func NewuidmapPath(newuidmapPath string) func(*LinuxFactory) error {
+	return func(l *LinuxFactory) error {
+		l.NewuidmapPath = newuidmapPath
+		return nil
+	}
+}
+
+// NewgidmapPath returns an option func to configure a LinuxFactory with the
+// provided ..
+func NewgidmapPath(newgidmapPath string) func(*LinuxFactory) error {
+	return func(l *LinuxFactory) error {
+		l.NewgidmapPath = newgidmapPath
+		return nil
+	}
+}
+
 // New returns a linux based container factory based in the root directory and
 // configures the factory with the provided option funcs.
 func New(root string, options ...func(*LinuxFactory) error) (Factory, error) {
@@ -146,6 +164,11 @@ type LinuxFactory struct {
 	// CriuPath is the path to the criu binary used for checkpoint and restore of
 	// containers.
 	CriuPath string
+
+	// New{u,g}uidmapPath is the path to the binaries used for mapping with
+	// rootless containers.
+	NewuidmapPath string
+	NewgidmapPath string
 
 	// Validator provides validation to container configurations.
 	Validator validate.Validator
@@ -193,6 +216,8 @@ func (l *LinuxFactory) Create(id string, config *configs.Config) (Container, err
 		config:        config,
 		initArgs:      l.InitArgs,
 		criuPath:      l.CriuPath,
+		newuidmapPath: l.NewuidmapPath,
+		newgidmapPath: l.NewgidmapPath,
 		cgroupManager: l.NewCgroupsManager(config.Cgroups, nil),
 	}
 	c.state = &stoppedState{c: c}
@@ -224,6 +249,8 @@ func (l *LinuxFactory) Load(id string) (Container, error) {
 		config:               &state.Config,
 		initArgs:             l.InitArgs,
 		criuPath:             l.CriuPath,
+		newuidmapPath:        l.NewuidmapPath,
+		newgidmapPath:        l.NewgidmapPath,
 		cgroupManager:        l.NewCgroupsManager(state.Config.Cgroups, state.CgroupPaths),
 		root:                 containerRoot,
 		created:              state.Created,
