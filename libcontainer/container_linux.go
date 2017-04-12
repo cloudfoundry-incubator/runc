@@ -1407,11 +1407,17 @@ func (c *linuxContainer) orderNamespacePaths(namespaces map[configs.NamespaceTyp
 	return paths, nil
 }
 
-func encodeIDMapping(idMap []configs.IDMap) ([]byte, error) {
+func encodeIDMapping(idMap []configs.IDMap, rootless bool) ([]byte, error) {
 	data := bytes.NewBuffer(nil)
+	separator := "\n"
+	if rootless {
+		// pass IDs as args to new{u,g}idmap rather than writing them directly
+		separator = " "
+	}
+
 	for _, im := range idMap {
-		mapping := fmt.Sprintf("%d %d %d ", im.ContainerID, im.HostID, im.Size)
-		if _, err := data.WriteString(mapping); err != nil {
+		line := fmt.Sprintf("%d %d %d%s", im.ContainerID, im.HostID, im.Size, separator)
+		if _, err := data.WriteString(line); err != nil {
 			return nil, err
 		}
 	}
@@ -1451,7 +1457,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 	if !joinExistingUser {
 		// write uid mappings
 		if len(c.config.UidMappings) > 0 {
-			b, err := encodeIDMapping(c.config.UidMappings)
+			b, err := encodeIDMapping(c.config.UidMappings, c.config.Rootless)
 			if err != nil {
 				return nil, err
 			}
@@ -1467,7 +1473,7 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 
 		// write gid mappings
 		if len(c.config.GidMappings) > 0 {
-			b, err := encodeIDMapping(c.config.GidMappings)
+			b, err := encodeIDMapping(c.config.GidMappings, c.config.Rootless)
 			if err != nil {
 				return nil, err
 			}
