@@ -41,7 +41,12 @@ func loadFactory(context *cli.Context) (libcontainer.Factory, error) {
 			return nil, fmt.Errorf("systemd cgroup flag passed, but systemd support for managing cgroups is not available")
 		}
 	}
-	return libcontainer.New(abs, cgroupManager, libcontainer.CriuPath(context.GlobalString("criu")))
+	return libcontainer.New(abs,
+		cgroupManager,
+		libcontainer.CriuPath(context.GlobalString("criu")),
+		libcontainer.NewuidmapPath(context.GlobalString("newuidmap")),
+		libcontainer.NewgidmapPath(context.GlobalString("newgidmap")),
+	)
 }
 
 // getContainer returns the specified container instance by loading it from state
@@ -82,6 +87,8 @@ func newProcess(p specs.Process) (*libcontainer.Process, error) {
 		Label:           p.SelinuxLabel,
 		NoNewPrivileges: &p.NoNewPrivileges,
 		AppArmorProfile: p.ApparmorProfile,
+		ConsoleWidth:    p.ConsoleSize.Width,
+		ConsoleHeight:   p.ConsoleSize.Height,
 	}
 	if p.Capabilities != nil {
 		lp.Capabilities = &configs.Capabilities{}

@@ -39,6 +39,8 @@ type linuxContainer struct {
 	initProcess          parentProcess
 	initProcessStartTime string
 	criuPath             string
+	newuidmapPath        string
+	newgidmapPath        string
 	m                    sync.Mutex
 	criuVersion          int
 	state                containerState
@@ -474,6 +476,8 @@ func (c *linuxContainer) newInitConfig(process *Process) *initConfig {
 		cfg.Rlimits = process.Rlimits
 	}
 	cfg.CreateConsole = process.ConsoleSocket != nil
+	cfg.ConsoleWidth = process.ConsoleWidth
+	cfg.ConsoleHeight = process.ConsoleHeight
 	return cfg
 }
 
@@ -1474,10 +1478,16 @@ func (c *linuxContainer) orderNamespacePaths(namespaces map[configs.NamespaceTyp
 	return paths, nil
 }
 
-func encodeIDMapping(idMap []configs.IDMap) ([]byte, error) {
+func encodeIDMapping(idMap []configs.IDMap, useExternalIDMapper bool) ([]byte, error) {
 	data := bytes.NewBuffer(nil)
+	separator := "\n"
+	if useExternalIDMapper {
+		// pass IDs as args to new{u,g}idmap rather than writing them directly
+		separator = " "
+	}
+
 	for _, im := range idMap {
-		line := fmt.Sprintf("%d %d %d\n", im.ContainerID, im.HostID, im.Size)
+		line := fmt.Sprintf("%d %d %d%s", im.ContainerID, im.HostID, im.Size, separator)
 		if _, err := data.WriteString(line); err != nil {
 			return nil, err
 		}
@@ -1518,7 +1528,12 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 	if !joinExistingUser {
 		// write uid mappings
 		if len(c.config.UidMappings) > 0 {
-			b, err := encodeIDMapping(c.config.UidMappings)
+			// user ns created by unprivileged process can only map its own uid/gid,
+			// leading to only one entry in the ID map.
+			// If more than one mapping specified, an external setuid executable must
+			// be used.
+			useExternalIDMapper := c.config.Rootless && len(c.config.UidMappings) > 1
+			b, err := encodeIDMapping(c.config.UidMappings, useExternalIDMapper)
 			if err != nil {
 				return nil, err
 			}
@@ -1526,11 +1541,18 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 				Type:  UidmapAttr,
 				Value: b,
 			})
+			if useExternalIDMapper {
+				r.AddData(&Bytemsg{
+					Type:  UidmapPathAttr,
+					Value: []byte(c.newuidmapPath),
+				})
+			}
 		}
 
 		// write gid mappings
 		if len(c.config.GidMappings) > 0 {
-			b, err := encodeIDMapping(c.config.GidMappings)
+			useExternalIDMapper := c.config.Rootless && len(c.config.GidMappings) > 1
+			b, err := encodeIDMapping(c.config.GidMappings, useExternalIDMapper)
 			if err != nil {
 				return nil, err
 			}
@@ -1538,6 +1560,12 @@ func (c *linuxContainer) bootstrapData(cloneFlags uintptr, nsMaps map[configs.Na
 				Type:  GidmapAttr,
 				Value: b,
 			})
+			if useExternalIDMapper {
+				r.AddData(&Bytemsg{
+					Type:  GidmapPathAttr,
+					Value: []byte(c.newgidmapPath),
+				})
+			}
 			// The following only applies if we are root.
 			if !c.config.Rootless {
 				// check if we have CAP_SETGID to setgroup properly
