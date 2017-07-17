@@ -83,6 +83,8 @@ func newProcess(p specs.Process) (*libcontainer.Process, error) {
 		Label:           p.SelinuxLabel,
 		NoNewPrivileges: &p.NoNewPrivileges,
 		AppArmorProfile: p.ApparmorProfile,
+		ConsoleWidth:    p.ConsoleSize.Width,
+		ConsoleHeight:   p.ConsoleSize.Height,
 	}
 	if p.Capabilities != nil {
 		lp.Capabilities = &configs.Capabilities{}
