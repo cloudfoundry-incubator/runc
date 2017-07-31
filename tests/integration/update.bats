@@ -260,6 +260,7 @@ EOF
 }
 
 @test "update rt period and runtime" {
+    requires root
     requires cgroups_rt
 
     # run a detached busybox

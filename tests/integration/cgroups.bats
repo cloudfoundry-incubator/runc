@@ -78,3 +78,48 @@ EOF
         check_cgroup_value $CGROUP_MEMORY "memory.kmem.limit_in_bytes" 50331648
     fi
 }
+
+@test "runc create (rootless + no limits + no cgrouppath + no permission) succeeds" {
+   requires rootless
+
+    runc run -d --console-socket $CONSOLE_SOCKET test_rootless_cgroups
+    [ "$status" -eq 0 ]
+}
+
+@test "runc create (rootless + no limits + cgrouppath + no permission) fails with permission error" {
+   requires rootless
+
+    # Add cgroup path
+    sed -i 's/\("linux": {\)/\1\n    "cgroupsPath": "\/runc-cgroups-integration-test",/'  ${BUSYBOX_BUNDLE}/config.json
+
+    runc run -d --console-socket $CONSOLE_SOCKET test_rootless_cgroups
+    [ "$status" -eq 1 ]
+    [[ ${lines[1]} == *"permission denied"* ]]
+}
+
+@test "runc create (rootless + limits + no cgrouppath + no permission) fails with informative error" {
+   requires rootless
+
+    # Add resource limit
+    sed -i 's/\("linux": {\)/\1\n   "resources": { "pids": { "limit": 100 } },/'  ${BUSYBOX_BUNDLE}/config.json
+
+    runc run -d --console-socket $CONSOLE_SOCKET test_rootless_cgroups
+    [ "$status" -eq 1 ]
+    [[ ${lines[1]} == *"cannot set limits on the pids cgroup, as the container has not joined it. The cgroup controller may not be mounted or you may not have previously had permissions to create the cgroup subdirectory"* ]]
+}
+
+@test "runc create (rootless + limits + cgrouppath + permission on the cgroup dir) succeeds" {
+   requires rootless
+   requires rootless_cgroups
+   # this test expects that the /sys/fs/cgroup/*/rootless_cgroup directories have already been created
+   # and chowned to the rootless user.
+
+    # Add cgroup path
+    sed -i 's/\("linux": {\)/\1\n    "cgroupsPath": "\/rootless_cgroup\/test_rootless_cgroups",/'  ${BUSYBOX_BUNDLE}/config.json
+
+    # Add resource limit
+    sed -i 's/\("linux": {\)/\1\n   "resources": { "pids": { "limit": 100 } },/'  ${BUSYBOX_BUNDLE}/config.json
+
+    runc run -d --console-socket $CONSOLE_SOCKET test_rootless_cgroups
+    [ "$status" -eq 0 ]
+}

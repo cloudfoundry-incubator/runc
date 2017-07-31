@@ -43,6 +43,12 @@ RT_PERIOD="${CGROUP_CPU_BASE_PATH}/cpu.rt_period_us"
 # Check if we're in rootless mode.
 ROOTLESS=$(id -u)
 
+rootless_cgroup_path="${CGROUP_MEMORY_BASE_PATH}/rootless_cgroup"
+if [ -d "$rootless_cgroup_path" ] &&
+	[ "$(stat -c "%U:%G" "$rootless_cgroup_path")" == "rootless:rootless" ]; then
+	ROOTLESS_CGROUPS_SETUP=1
+fi
+
 # Wrapper for runc.
 function runc() {
 	run __runc "$@"
@@ -96,6 +102,16 @@ function requires() {
 			;;
 		root)
 			if [ "$ROOTLESS" -ne 0 ]; then
+				skip "test requires ${var}"
+			fi
+			;;
+		rootless)
+			if [ "$ROOTLESS" -eq 0 ]; then
+				skip "test requires ${var}"
+			fi
+			;;
+		rootless_cgroups)
+			if [ -z "${ROOTLESS_CGROUPS_SETUP:-}" ]; then
 				skip "test requires ${var}"
 			fi
 			;;
