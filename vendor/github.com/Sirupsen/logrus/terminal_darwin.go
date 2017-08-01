@@ -3,12 +3,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build !appengine
-
 package logrus
 
 import "syscall"
 
-const ioctlReadTermios = syscall.TCGETS
+const ioctlReadTermios = syscall.TIOCGETA
 
 type Termios syscall.Termios
