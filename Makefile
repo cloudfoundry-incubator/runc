@@ -96,10 +96,14 @@ integration: runcimage
 localintegration: all
 	bats -t tests/integration${TESTFLAGS}
 
-rootlessintegration: runcimage
-	docker run -e TESTFLAGS -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) --cap-drop=ALL -u rootless $(RUNC_IMAGE) make localintegration
+rootlessintegrationstub:
+	mkdir -p /sys/fs/cgroup/{blkio,cpu,cpuacct,cpuset,devices,freezer,hugetlb,memory,net_cls,net_prio,openrc,perf_event,pids,systemd}/rootless_cgroup
+	chown rootless:rootless -R /sys/fs/cgroup/{blkio,cpu,cpuacct,cpuset,devices,freezer,hugetlb,memory,net_cls,net_prio,openrc,perf_event,pids,systemd}/rootless_cgroup
+	make localrootlessintegration
 
-# FIXME: This should not be separate from rootlessintegration's method of running.
+rootlessintegration: runcimage
+	docker run -e TESTFLAGS -t --privileged --rm -v $(CURDIR):/go/src/$(PROJECT) $(RUNC_IMAGE) make rootlessintegrationstub
+
 localrootlessintegration: all
 	sudo -u rootless -H PATH="${PATH}" bats -t tests/integration${TESTFLAGS}
 
